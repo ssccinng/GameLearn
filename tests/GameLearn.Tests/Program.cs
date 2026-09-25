@@ -405,6 +405,15 @@ await Test("AI failures: homepage HTML, empty content and auth errors are action
         Assert(raised, "failure missing safe actionable message");
     }
 });
+await Test("Learning priority: difficult and unknown sentences rise above common sentences", () =>
+{
+    using var dictionary = new OfflineDictionary(Path.Combine(Path.GetTempPath(), "GameLearn-priority-missing-" + Guid.NewGuid(), "missing.sqlite"));
+    var saved = new Dictionary<string, SavedWord>(StringComparer.OrdinalIgnoreCase);
+    var easy = LearningPriority.Score(new RecognizedLine("The old ship is here.", 0.99, new(0, 0, 100, 20)), dictionary, saved);
+    var hard = LearningPriority.Score(new RecognizedLine("The uncompromising archaeologist deciphered the inscription.", 0.99, new(0, 0, 100, 20)), dictionary, saved);
+    Assert(hard.Score > easy.Score && hard.PriorityLevel > easy.PriorityLevel && hard.PriorityLabel == "优先学习", "difficulty ranking did not elevate rare long words");
+    return Task.CompletedTask;
+});
 
 var reportPath = args.Length > 0 ? args[0] : "test-results.json";
 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(reportPath))!);

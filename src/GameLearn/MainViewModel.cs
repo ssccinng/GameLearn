@@ -28,6 +28,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string AiConfigurationStatus { get => aiConfigurationStatus; private set => Set(ref aiConfigurationStatus, value); }
     public bool IsAiTesting { get => testingAi; private set { if (Set(ref testingAi, value)) Raise(nameof(CanTestAi)); } }
     public bool CanTestAi => !IsAiTesting;
+    public IReadOnlyList<PrioritizedLine> GetPrioritizedLines()
+    {
+        var saved = Store.Words().ToDictionary(word => word.Word, StringComparer.OrdinalIgnoreCase);
+        return Result is null ? Array.Empty<PrioritizedLine>() : LearningPriority.Rank(Result.Lines, Dictionary, saved);
+    }
     private CancellationTokenSource? automaticCapture;
     private DateTimeOffset nextAutomatic;
     private long manualSequence;

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace GameLearn;
@@ -34,6 +35,50 @@ public record CapturedFrame(Guid Id, DateTimeOffset Timestamp, string Game, stri
 public record RecognizedLine(string Text, double Confidence, PixelRect Bounds)
 {
     public IEnumerable<string> Words => Regex.Matches(Text, @"[A-Za-z]+(?:['’\-][A-Za-z]+)*").Select(m => m.Value);
+}
+public sealed record PrioritizedLine(RecognizedLine Line, IReadOnlyList<string> Words, double Score, int PriorityLevel, string PriorityLabel, Brush CardBrush)
+{
+    public string Text => Line.Text;
+}
+public static class LearningPriority
+{
+    private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a","about","after","again","all","also","an","and","another","any","are","around","as","ask","at","back","be","because","been","before","being","but","by","can","come","could","day","did","do","down","each","even","every","find","first","for","from","get","go","good","got","had","has","have","he","her","here","him","his","how","i","if","in","into","is","it","its","just","know","like","little","look","make","man","me","more","most","much","my","need","new","no","not","now","of","off","on","one","only","or","other","our","out","over","people","read","right","said","same","see","she","should","so","some","such","than","that","the","their","them","then","there","these","they","think","this","time","to","too","two","under","up","us","use","very","want","was","way","we","well","were","what","when","where","which","who","will","with","would","yeah","you","your"
+    };
+    public static IReadOnlyList<PrioritizedLine> Rank(IEnumerable<RecognizedLine> lines, OfflineDictionary dictionary, IReadOnlyDictionary<string, SavedWord> saved)
+        => lines.Select(line => Score(line, dictionary, saved)).OrderByDescending(line => line.Score).ThenBy(line => line.Line.Bounds.Y).ToArray();
+    public static PrioritizedLine Score(RecognizedLine line, OfflineDictionary dictionary, IReadOnlyDictionary<string, SavedWord> saved)
+    {
+        var words = line.Words.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (words.Length == 0) return new(line, words, 0, 0, "无英文词", Brushes.Transparent);
+        var score = 0d;
+        foreach (var observed in words)
+        {
+            var entry = dictionary.Lookup(observed);
+            var normalized = entry.Word.ToLowerInvariant();
+            if (CommonWords.Contains(normalized)) score += 0.05;
+            else if (saved.TryGetValue(normalized, out var known)) score += known.Mastered ? 0.15 : 1.0;
+            else score += 2.25;
+            if (entry.Translation.Contains("未收录", StringComparison.Ordinal)) score += 2.5;
+            if (normalized.Length >= 8) score += 0.85;
+            else if (normalized.Length >= 6) score += 0.35;
+            if (observed.Contains('-') || observed.Contains('\'') || observed.Contains('’')) score += 0.35;
+        }
+        score += Math.Min(1.5, Math.Max(0, words.Length - 4) * 0.18);
+        score += Math.Max(0, 0.92 - line.Confidence) * 2.0;
+        var level = score >= 8 ? 3 : score >= 4 ? 2 : score >= 1.5 ? 1 : 0;
+        var label = level switch { 3 => "优先学习", 2 => "值得看看", 1 => "可以复习", _ => "轻松复习" };
+        var color = level switch
+        {
+            3 => new SolidColorBrush(Color.FromRgb(47, 79, 67)),
+            2 => new SolidColorBrush(Color.FromRgb(38, 66, 69)),
+            1 => new SolidColorBrush(Color.FromRgb(33, 55, 62)),
+            _ => new SolidColorBrush(Color.FromRgb(28, 48, 56))
+        };
+        color.Freeze();
+        return new(line, words, Math.Round(score, 1), level, label, color);
+    }
 }
 public record RecognitionResult(CapturedFrame Frame, IReadOnlyList<RecognizedLine> Lines, string Engine, TimeSpan Elapsed);
 public static class SceneContext

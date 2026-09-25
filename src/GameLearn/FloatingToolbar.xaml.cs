@@ -47,7 +47,7 @@ public partial class FloatingToolbar : Window
         IsCollapsed = collapsed;
         ExpandedContent.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         CollapsedContent.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
-        Width = collapsed ? 64 : 560; Height = collapsed ? 64 : 340;
+        Width = collapsed ? 64 : 680; Height = collapsed ? 64 : 460;
         if (!save) return;
         vm.Settings.FloatingBarCollapsed = collapsed;
         if (IsLoaded)
@@ -60,12 +60,12 @@ public partial class FloatingToolbar : Window
     }
     private void UpdateVisibleWords()
     {
-        var lines = vm.Result?.Lines.Where(line => line.Words.Any()).ToArray() ?? Array.Empty<RecognizedLine>();
+        var lines = vm.GetPrioritizedLines().Where(line => line.Words.Count > 0).ToArray();
         CurrentWordLines.ItemsSource = lines;
         EmptyWords.Visibility = lines.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyWordsHint.Text = vm.Result is null ? "点击「识别」，或开启「自动」持续读取游戏画面。"
             : "这次没有识别到英文。可以在主界面框选对话区域后再识别。";
-        SceneStamp.Text = vm.Result is null ? "尚未识别" : $"{vm.Frame!.Timestamp:HH:mm:ss} · {lines.Sum(line => line.Words.Count())} 个词";
+        SceneStamp.Text = vm.Result is null ? "尚未识别" : $"{vm.Frame!.Timestamp:HH:mm:ss} · {lines.Sum(line => line.Words.Count)} 个词 · 难词优先";
         WordsScroll.ScrollToTop();
     }
     public void ShowWords()
@@ -109,6 +109,10 @@ public partial class FloatingToolbar : Window
     private async void Capture_Click(object sender, RoutedEventArgs e) => await recognize();
     private async void Automatic_Click(object sender, RoutedEventArgs e)
     {
+        // Keep the toggle usable even when the no-activate window prevents WPF from
+        // updating the binding before the click event arrives.
+        var requested = AutomaticSwitch.IsChecked == true;
+        if (requested != vm.IsAutomatic) vm.IsAutomatic = requested;
         // Enabling automatic mode is an explicit user action. Seed an empty panel once,
         // even while the pointer remains over the switch and background presentation is held.
         if (vm.IsAutomatic && vm.Result is null) await recognize();

@@ -32,7 +32,7 @@ internal static class FloatingRegression
         {
             vm.Status = "准备就绪 · 点击识别，遇见生词就记下来";
             Render((FrameworkElement)bar.Content, bar.Width, bar.Height, Path.Combine(output, "floating-toolbar.png"));
-            Check("Expanded floating window includes room for current words", bar.Width == 560 && bar.Height == 340 && !bar.ShowInTaskbar && bar.Topmost);
+            Check("Expanded floating window includes room for current words", bar.Width == 680 && bar.Height == 460 && !bar.ShowInTaskbar && bar.Topmost);
             var handle = new WindowInteropHelper(bar).EnsureHandle(); // Hidden native window only; never shown on the user's desktop.
             var style = GetWindowLongPtr(handle, -20).ToInt64();
             Check("Native toolbar uses no-activate tool-window styles", (style & 0x08000000) != 0 && (style & 0x80) != 0 && !bar.ShowActivated && !bar.IsVisible);
@@ -50,7 +50,7 @@ internal static class FloatingRegression
             Render((FrameworkElement)bar.Content, bar.Width, bar.Height, Path.Combine(output, "floating-toolbar-collapsed.png"));
             Check("Collapsed state is compact and persisted", bar.Width == 64 && bar.Height == 64 && AppSettings.Load().FloatingBarCollapsed);
             bar.SetCollapsed(false);
-            Check("Expanding restores toolbar layout", bar.Width == 560 && !AppSettings.Load().FloatingBarCollapsed);
+            Check("Expanding restores toolbar layout", bar.Width == 680 && !AppSettings.Load().FloatingBarCollapsed);
             using var fixture = new SKBitmap(640, 360); fixture.Erase(new SKColor(36, 58, 52));
             var frame = CaptureService.CreateFrame(fixture, "游戏示例", "fixture");
             var line = new RecognizedLine("A little elbow grease can repair the wrecked ship.", 0.99, new(30, 100, 570, 35));
@@ -82,12 +82,12 @@ internal static class FloatingRegression
             var newerFrame = CaptureService.CreateFrame(fixture, "游戏示例", "fixture");
             var newer = new RecognitionResult(newerFrame, new[] { new RecognizedLine("Another wrecked boat.", 0.99, line.Bounds) }, "fixture", TimeSpan.Zero);
             await vm.Scheduler.EnqueueAsync(new(newerFrame, TriggerKind.Automatic, vm.Scheduler.Generation, new FixedProvider(newer)));
-            Check("Current word rows remain fixed while newer automatic results arrive", wordsControl.Items.Count == 2 && ReferenceEquals(wordsControl.Items[1], line));
+            Check("Current word rows remain fixed while newer automatic results arrive", wordsControl.Items.Count == 2 && wordsControl.Items.Cast<PrioritizedLine>().Any(item => ReferenceEquals(item.Line, line)));
             wordButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check("Click during protected interaction keeps the original scene", definitions == 2 && vm.SelectedEncounter!.ImagePath.EndsWith(frame.Id + ".png", StringComparison.Ordinal));
             vm.SetPresentationInteraction(hold, false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(vm.FlushAutomaticPresentation, DispatcherPriority.Background);
-            Check("Floating word rows resume with the latest result", wordsControl.Items.Count == 1 && ((RecognizedLine)wordsControl.Items[0]).Text == "Another wrecked boat.");
+            Check("Floating word rows resume with the latest result", wordsControl.Items.Count == 1 && ((PrioritizedLine)wordsControl.Items[0]).Line.Text == "Another wrecked boat.");
             wordButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check("A stale word button cannot save a different frame", definitions == 2);
             vm.Scheduler.SetAutomatic(false);
