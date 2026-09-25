@@ -13,6 +13,7 @@ public static class Diagnostics
         if (args.Contains("--obs-direct")) { await ObsDiagnostics.RunAsync(output); return; }
         if (args.Contains("--presentation-regression")) { await PresentationRegression.RunAsync(output); return; }
         if (args.Contains("--floating-regression")) { await FloatingRegression.RunAsync(output); return; }
+        if (args.Contains("--projection-regression")) { await ProjectionRegression.RunAsync(output); return; }
         if (args.Contains("--ai-settings-regression")) { await AiSettingsRegression.RunAsync(output); return; }
         if (args.Contains("--test-saved-ai"))
         {

@@ -12,6 +12,10 @@ public partial class FloatingToolbar : Window
     private readonly Func<Task> recognize;
     private readonly Action recall;
     private readonly Action expand;
+    private readonly Action? showWordbook;
+    private readonly Func<bool, bool>? setSelectionMode;
+    private readonly Action? chooseSource;
+    private readonly Action? showRecent;
     private readonly Action hide;
     private readonly Action? showDefinition;
     private IDisposable? dragging;
@@ -19,10 +23,12 @@ public partial class FloatingToolbar : Window
     private bool moved;
     public bool IsCollapsed { get; private set; }
 
-    public FloatingToolbar(MainViewModel vm, Func<Task> recognize, Action recall, Action expand, Action hide, Action? showDefinition = null)
+    public FloatingToolbar(MainViewModel vm, Func<Task> recognize, Action recall, Action expand, Action hide, Action? showDefinition = null, Action? showWordbook = null, Func<bool, bool>? setSelectionMode = null, Action? chooseSource = null, Action? showRecent = null)
     {
-        InitializeComponent(); this.vm = vm; this.recognize = recognize; this.recall = recall; this.expand = expand; this.hide = hide;
+        InitializeComponent(); this.vm = vm; this.recognize = recognize; this.recall = recall; this.expand = expand; this.hide = hide; this.showWordbook = showWordbook; this.setSelectionMode = setSelectionMode;
         this.showDefinition = showDefinition;
+        this.chooseSource = chooseSource;
+        this.showRecent = showRecent;
         DataContext = vm; _ = new WindowInteractionGuard(this, vm);
         vm.FrameChanged += UpdateVisibleWords;
         UpdateVisibleWords();
@@ -65,7 +71,7 @@ public partial class FloatingToolbar : Window
         EmptyWords.Visibility = lines.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyWordsHint.Text = vm.Result is null ? "点击「识别」，或开启「自动」持续读取游戏画面。"
             : "这次没有识别到英文。可以在主界面框选对话区域后再识别。";
-        SceneStamp.Text = vm.Result is null ? "尚未识别" : $"{vm.Frame!.Timestamp:HH:mm:ss} · {lines.Sum(line => line.Words.Count)} 个词 · 难词优先";
+        SceneStamp.Text = vm.Result is null ? "尚未识别" : $"{lines.Length} 段 · {lines.Sum(line => line.Words.Count)} 个词 · 难词优先";
         WordsScroll.ScrollToTop();
     }
     public void ShowWords()
@@ -76,6 +82,8 @@ public partial class FloatingToolbar : Window
     private void Word_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: string word, Tag: RecognizedLine line }) return;
+        word = System.Text.RegularExpressions.Regex.Match(word, @"[A-Za-z]+(?:['’\-][A-Za-z]+)*").Value;
+        if (word.Length == 0) return;
         if (!vm.Lines.Any(current => ReferenceEquals(current, line))) return;
         using var interaction = vm.HoldAutomaticPresentation();
         vm.SelectedLine = line; vm.Learn(word);
@@ -119,6 +127,16 @@ public partial class FloatingToolbar : Window
     }
     private void Recall_Click(object sender, RoutedEventArgs e) => recall();
     private void Expand_Click(object sender, RoutedEventArgs e) => expand();
+    private void Wordbook_Click(object sender, RoutedEventArgs e) => (showWordbook ?? expand)();
+    private void Source_Click(object sender, RoutedEventArgs e) => (chooseSource ?? expand)();
+    private void Recent_Click(object sender, RoutedEventArgs e) => (showRecent ?? showWordbook ?? expand)();
+    private void Selection_Click(object sender, RoutedEventArgs e)
+    {
+        var requested = SelectionSwitch.IsChecked == true;
+        if (setSelectionMode is null || setSelectionMode(requested)) return;
+        SelectionSwitch.IsChecked = false;
+    }
+    internal void SetSelectionMode(bool enabled) => SelectionSwitch.IsChecked = enabled;
     private void Collapse_Click(object sender, RoutedEventArgs e) => SetCollapsed(!IsCollapsed);
     private void Hide_Click(object sender, RoutedEventArgs e) => hide();
     [DllImport("user32.dll")] private static extern nint GetWindowLongPtr(nint hwnd, int index);

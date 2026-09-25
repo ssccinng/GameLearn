@@ -1,0 +1,23 @@
+<Window x:Class="GameLearn.SourcePickerWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选择画面来源" Width="690" Height="650" MinWidth="540" MinHeight="430" WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" WindowStartupLocation="CenterScreen" Foreground="#ECF3F5" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="14">
+  <Window.Resources>
+    <DataTemplate x:Key="SourceRow"><Button Click="Source_Click" HorizontalContentAlignment="Stretch" Margin="0,0,0,7" Padding="12,9" Background="#20323F"><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/><TextBlock Text="{Binding SelectionHint}" Foreground="#A5BCBE" FontSize="12" Margin="0,4,0,0"/></StackPanel></Button></DataTemplate>
+    <Style TargetType="Expander"><Setter Property="Foreground" Value="#DCECE5"/><Setter Property="Margin" Value="0,5,0,8"/></Style>
+  </Window.Resources>
+  <Border Background="#111E26" BorderBrush="#40565B" BorderThickness="1" CornerRadius="16" Padding="20">
+    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <DockPanel Background="Transparent" MouseLeftButtonDown="Header_Drag" Margin="0,0,0,16"><Button Content="×" DockPanel.Dock="Right" Click="Close_Click" Width="32" Padding="0,5"/><StackPanel><TextBlock Text="选择画面来源" FontSize="21" FontWeight="SemiBold"/><TextBlock Text="点击来源即可切换；查看列表不会更换当前画面。" Foreground="#94A9B8" FontSize="12" Margin="0,5,0,0"/></StackPanel></DockPanel>
+      <Grid Grid.Row="1" Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox x:Name="SearchBox" TextChanged="Search_Changed" ToolTip="搜索窗口、投影或 OBS 来源"/><Button x:Name="RefreshButton" Grid.Column="1" Content="刷新窗口" Click="Refresh_Click" Margin="8,0,0,0"/><Button x:Name="ObsButton" Grid.Column="2" Content="连接 / 刷新 OBS" Click="Obs_Click" Margin="8,0,0,0"/></Grid>
+      <TextBlock x:Name="CurrentSource" Grid.Row="2" Foreground="#A8E7BF" FontSize="12" Margin="0,0,0,12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+      <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Hidden"><StackPanel>
+        <Expander x:Name="ProjectorGroup" Header="OBS 投影 · 推荐用于画面选词" IsExpanded="True"><StackPanel Margin="8,10,0,0"><TextBlock Text="支持源、预览或场景的全屏投影。按投影实际画面识别，包含缩放与黑边。" Foreground="#94A9B8" FontSize="12" Margin="0,0,0,10"/><ItemsControl x:Name="ProjectorItems" ItemTemplate="{StaticResource SourceRow}"/><TextBlock x:Name="NoProjectors" Text="暂无投影窗口。请在 OBS 画面上右键，打开「全屏投影」或「窗口投影」，再刷新窗口。" Foreground="#94A9B8" FontSize="12"/></StackPanel></Expander>
+        <Expander Header="游戏及其他窗口" IsExpanded="True"><ItemsControl x:Name="WindowItems" ItemTemplate="{StaticResource SourceRow}" Margin="8,10,0,0"/></Expander>
+        <Expander Header="OBS 当前使用的捕获源" IsExpanded="True"><ItemsControl x:Name="ActiveItems" ItemTemplate="{StaticResource SourceRow}" Margin="8,10,0,0"/></Expander>
+        <Expander x:Name="OtherGroup" Header="OBS 其他捕获源"><ItemsControl x:Name="OtherItems" ItemTemplate="{StaticResource SourceRow}" Margin="8,10,0,0"/></Expander>
+        <Expander x:Name="SceneGroup" Header="OBS 场景与输出"><ItemsControl x:Name="SceneItems" ItemTemplate="{StaticResource SourceRow}" Margin="8,10,0,0"/></Expander>
+        <Expander x:Name="InterfaceGroup" Header="OBS 软件界面"><ItemsControl x:Name="InterfaceItems" ItemTemplate="{StaticResource SourceRow}" Margin="8,10,0,0"/></Expander>
+      </StackPanel></ScrollViewer>
+      <TextBlock x:Name="PickerStatus" Grid.Row="4" Foreground="#94A9B8" FontSize="12" Margin="0,12,0,0"/>
+    </Grid>
+  </Border>
+</Window>

@@ -3,46 +3,59 @@
         Foreground="#EAF3F0" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Topmost="True" ShowInTaskbar="False" ShowActivated="False" WindowStartupLocation="Manual">
   <Window.Resources>
     <Style x:Key="ToolButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Padding" Value="8,8"/><Setter Property="Margin" Value="3,0"/><Setter Property="Focusable" Value="False"/><Setter Property="Background" Value="#23373F"/></Style>
+    <Style x:Key="SentenceWord" TargetType="Button">
+      <Setter Property="Focusable" Value="False"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="#ECF7F0"/><Setter Property="Padding" Value="2,3"/><Setter Property="Margin" Value="0,0,2,0"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="WordSurface" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
+        <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="WordSurface" Property="Background" Value="#496B5E"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style x:Key="AutomaticSwitch" TargetType="ToggleButton">
       <Setter Property="Focusable" Value="False"/><Setter Property="Margin" Value="3,0"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="Shell" Background="#23373F" CornerRadius="8" Padding="8"><StackPanel Orientation="Horizontal" HorizontalAlignment="Center"><Ellipse x:Name="Lamp" Width="6" Height="6" Fill="#788E96" Margin="0,0,6,0" VerticalAlignment="Center"/><TextBlock x:Name="Label" Text="自动" Foreground="#DCE9EA"/></StackPanel></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Shell" Property="Background" Value="#2A4D3D"/><Setter TargetName="Lamp" Property="Fill" Value="#A8E7BF"/><Setter TargetName="Label" Property="Foreground" Value="#BCEECE"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Shell" Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="SelectionSwitch" TargetType="ToggleButton">
+      <Setter Property="Focusable" Value="False"/><Setter Property="Margin" Value="3,0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="#DCE9EA"/><Setter Property="Background" Value="#23373F"/><Setter Property="Padding" Value="8,8"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton"><Border x:Name="Shell" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Shell" Property="Background" Value="#2A4D3D"/><Setter Property="Foreground" Value="#BCEECE"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Shell" Property="Opacity" Value="0.85"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
   </Window.Resources>
   <Border x:Name="Surface" Margin="5" CornerRadius="17" Background="#F514222B" BorderBrush="#496259" BorderThickness="1" Padding="9">
     <Grid>
       <Grid x:Name="ExpandedContent">
         <Grid.RowDefinitions><RowDefinition Height="35"/><RowDefinition Height="16"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/><ColumnDefinition Width="76"/><ColumnDefinition Width="68"/><ColumnDefinition Width="54"/><ColumnDefinition Width="62"/><ColumnDefinition Width="28"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>
-        <Thumb x:Name="DragHandle" Grid.RowSpan="2" Focusable="False" Cursor="SizeAll" ToolTip="拖动悬浮栏" DragStarted="Drag_Started" DragDelta="Drag_Delta" DragCompleted="Drag_Completed"><Thumb.Template><ControlTemplate><TextBlock Text="⠿" Foreground="#819D96" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/></ControlTemplate></Thumb.Template></Thumb>
-        <Border Grid.Column="1" Background="#A8E7BF" CornerRadius="10" Height="31" Width="31" VerticalAlignment="Center"><TextBlock Text="GL" FontSize="13" FontWeight="Bold" Foreground="#143423" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-        <TextBlock Grid.Column="2" Text="GameLearn" FontWeight="SemiBold" FontSize="14" Margin="9,0,3,0" VerticalAlignment="Center" TextWrapping="NoWrap"/>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/><ColumnDefinition Width="76"/><ColumnDefinition Width="68"/><ColumnDefinition Width="54"/><ColumnDefinition Width="54"/><ColumnDefinition Width="54"/><ColumnDefinition Width="54"/><ColumnDefinition Width="28"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>
+        <Thumb x:Name="DragHandle" Grid.RowSpan="2" Grid.ColumnSpan="11" Focusable="False" Cursor="SizeAll" ToolTip="拖动顶部栏移动窗口" DragStarted="Drag_Started" DragDelta="Drag_Delta" DragCompleted="Drag_Completed"><Thumb.Template><ControlTemplate><Border Background="Transparent"><TextBlock Text="⠿" Foreground="#819D96" FontSize="20" Width="18" TextAlignment="Center" HorizontalAlignment="Left" VerticalAlignment="Center"/></Border></ControlTemplate></Thumb.Template></Thumb>
+        <Border Grid.Column="1" IsHitTestVisible="False" Background="#A8E7BF" CornerRadius="10" Height="31" Width="31" VerticalAlignment="Center"><TextBlock Text="GL" FontSize="13" FontWeight="Bold" Foreground="#143423" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+        <TextBlock Grid.Column="2" IsHitTestVisible="False" Text="GameLearn" FontWeight="SemiBold" FontSize="14" Margin="9,0,3,0" VerticalAlignment="Center" TextWrapping="NoWrap"/>
         <Button x:Name="CaptureButton" Grid.Column="3" Content="识别" Style="{StaticResource ToolButton}" Background="#A8E7BF" Foreground="#153325" FontWeight="SemiBold" Click="Capture_Click" ToolTip="识别当前游戏画面"/>
         <ToggleButton x:Name="AutomaticSwitch" Grid.Column="4" Style="{StaticResource AutomaticSwitch}" IsChecked="{Binding IsAutomatic, Mode=TwoWay}" Click="Automatic_Click" ToolTip="开启或关闭自动识别"/>
-        <Button x:Name="RecallButton" Grid.Column="5" Content="回忆" Style="{StaticResource ToolButton}" Click="Recall_Click" ToolTip="查看上次遇见的场景"/>
-        <Button x:Name="ExpandButton" Grid.Column="6" Content="展开" Style="{StaticResource ToolButton}" Click="Expand_Click" ToolTip="打开主界面、单词本与设置"/>
-        <Button x:Name="CollapseButton" Grid.Column="7" Content="‹" Style="{StaticResource ToolButton}" FontSize="20" Padding="0" Click="Collapse_Click" ToolTip="收起成小按钮"/>
-        <Button x:Name="HideButton" Grid.Column="8" Content="×" Style="{StaticResource ToolButton}" FontSize="17" Padding="0" Click="Hide_Click" ToolTip="隐藏悬浮栏，可从系统托盘恢复"/>
-        <TextBlock x:Name="Caption" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="8" ToolTip="{Binding Status}" Foreground="#90AAA5" FontSize="10" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="3,3,2,0"><Run Text="{Binding SelectedSource.Title}"/><Run Text=" · "/><Run Text="{Binding Status}"/></TextBlock>
-        <DockPanel Grid.Row="2" Grid.ColumnSpan="9" Margin="8,13,8,9">
-          <TextBlock Text="画面单词" FontWeight="SemiBold" Foreground="#B8E5CA"/>
+        <ToggleButton x:Name="SelectionSwitch" Grid.Column="5" Content="选词" Style="{StaticResource SelectionSwitch}" Click="Selection_Click" ToolTip="实时选词：临时开启自动识别，在游戏画面上点行后选词"/>
+        <Button x:Name="RecallButton" Grid.Column="6" Content="回忆" Style="{StaticResource ToolButton}" Click="Recall_Click" ToolTip="查看上次遇见的场景"/>
+        <Button x:Name="WordbookButton" Grid.Column="7" Content="词本" Style="{StaticResource ToolButton}" Click="Wordbook_Click" ToolTip="打开单词本"/>
+        <Button x:Name="ExpandButton" Grid.Column="8" Content="展开" Style="{StaticResource ToolButton}" Click="Expand_Click" ToolTip="打开主界面与设置"/>
+        <Button x:Name="CollapseButton" Grid.Column="9" Content="‹" Style="{StaticResource ToolButton}" FontSize="20" Padding="0" Click="Collapse_Click" ToolTip="收起成小按钮"/>
+        <Button x:Name="HideButton" Grid.Column="10" Content="×" Style="{StaticResource ToolButton}" FontSize="17" Padding="0" Click="Hide_Click" ToolTip="隐藏悬浮栏，可从系统托盘恢复"/>
+        <TextBlock x:Name="Caption" IsHitTestVisible="False" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="10" ToolTip="{Binding Status}" Foreground="#90AAA5" FontSize="10" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="3,3,2,0"><Run Text="{Binding SelectedSource.Title}"/><Run Text=" · "/><Run Text="{Binding Status}"/></TextBlock>
+        <DockPanel Grid.Row="2" Grid.ColumnSpan="11" Margin="8,10,8,7">
+          <Button x:Name="SourceButton" DockPanel.Dock="Right" Content="更换来源" Click="Source_Click" Style="{StaticResource ToolButton}" FontSize="11" Padding="8,4" Margin="8,0,0,0" ToolTip="选择游戏窗口、OBS 投影或 OBS 纯画面"/>
+          <Button x:Name="RecentButton" DockPanel.Dock="Right" Content="最近识别" Click="Recent_Click" Style="{StaticResource ToolButton}" FontSize="11" Padding="8,4" Margin="8,0,0,0" ToolTip="回看近期识别过的原句"/>
+          <TextBlock Text="当前英文" FontWeight="SemiBold" Foreground="#B8E5CA"/>
           <TextBlock x:Name="SceneStamp" FontSize="11" Foreground="#829E98" Margin="10,2,0,0"/>
           <TextBlock FontSize="11" HorizontalAlignment="Right" Margin="6,2,0,0"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="点单词查看释义"/><Setter Property="Foreground" Value="#90AAA5"/><Style.Triggers><DataTrigger Binding="{Binding IsAutomaticRefreshPaused}" Value="True"><Setter Property="Text" Value="操作中 · 内容已固定"/><Setter Property="Foreground" Value="#B8E5CA"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
         </DockPanel>
-        <Grid Grid.Row="3" Grid.ColumnSpan="9" Margin="5,0,2,3">
+        <Grid Grid.Row="3" Grid.ColumnSpan="11" Margin="5,0,2,3">
           <ScrollViewer x:Name="WordsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <ItemsControl x:Name="CurrentWordLines">
               <ItemsControl.ItemTemplate><DataTemplate>
-                <Border Background="{Binding CardBrush}" CornerRadius="10" Padding="12,10" Margin="0,0,4,8">
+                <Border Background="{Binding CardBrush}" CornerRadius="8" Padding="10,7" Margin="0,0,4,6">
                   <StackPanel>
-                    <DockPanel Margin="0,0,0,7">
-                      <Border DockPanel.Dock="Right" Background="#2B4948" CornerRadius="5" Padding="6,2"><TextBlock Text="{Binding PriorityLabel}" FontSize="10" Foreground="#C4E9D1"/></Border>
-                      <TextBlock Text="{Binding Text}" FontSize="12" Foreground="#B9D2CB" TextTrimming="CharacterEllipsis" MaxWidth="530"/>
-                    </DockPanel>
-                    <ItemsControl ItemsSource="{Binding Words}">
+                    <TextBlock Text="{Binding PriorityLabel}" FontSize="10" Foreground="#A0C5B0" Margin="2,0,0,2"/>
+                    <ItemsControl ItemsSource="{Binding DisplayWords}">
                       <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate><DataTemplate>
-                        <Button Tag="{Binding DataContext.Line, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" Click="Word_Click" Focusable="False" Background="#2C4949" Foreground="#ECF7F0" Padding="10,6" Margin="0,0,6,5" ToolTip="查看释义并记录这个场景">
-                          <TextBlock Text="{Binding}" FontSize="15" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxWidth="540"/>
+                        <Button Tag="{Binding DataContext.Line, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" Click="Word_Click" Style="{StaticResource SentenceWord}" ToolTip="查看释义并记录这个场景">
+                          <TextBlock Text="{Binding}" FontSize="16" TextWrapping="Wrap" MaxWidth="570"/>
                         </Button>
                       </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>

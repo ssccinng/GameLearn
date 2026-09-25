@@ -58,7 +58,7 @@ public sealed class CaptureService : IDisposable
             try { list.Add(new(handle, title.ToString(), Process.GetProcessById((int)pid).ProcessName)); } catch (ArgumentException) { }
             return true;
         }, 0);
-        return list.OrderByDescending(w => w.ProcessName == "obs64" && w.Title.Contains("Projector", StringComparison.OrdinalIgnoreCase))
+        return list.OrderByDescending(w => w.IsObsProjector)
             .ThenByDescending(w => w.ProcessName == "obs64").ThenBy(w => w.Title).ToArray();
     }
 
@@ -69,19 +69,23 @@ public sealed class CaptureService : IDisposable
         {
             Validate(source);
             SKBitmap? bitmap = null;
+            var clientOnly = false;
+            var bounds = CaptureGeometry.Read(source.Handle, false);
             if (source.ProcessName.Equals("obs64", StringComparison.OrdinalIgnoreCase))
             {
                 // OBS renders correctly through PrintWindow. Avoid a capture indicator entirely.
                 try
                 {
+                    bounds = CaptureGeometry.Read(source.Handle, true);
                     bitmap = await Task.Run(() => CapturePrintWindow(source.Handle), token);
                     if (IsBlank(bitmap)) { bitmap.Dispose(); bitmap = null; }
-                    else { CloseSession(); LastBackend = "OBS · PrintWindow"; }
+                    else { CloseSession(); LastBackend = "OBS · PrintWindow"; clientOnly = true; }
                 }
                 catch (Exception error) when (error is not OperationCanceledException) { bitmap?.Dispose(); bitmap = null; }
             }
             if (bitmap is null)
             {
+                bounds = CaptureGeometry.Read(source.Handle, false);
                 bitmap = await CaptureWgcAsync(source.Handle, token);
                 LastBackend = "Windows Graphics Capture";
             }
@@ -89,7 +93,11 @@ public sealed class CaptureService : IDisposable
             {
                 token.ThrowIfCancellationRequested(); Validate(source);
                 if (IsBlank(bitmap)) throw new InvalidOperationException("捕获到黑画面，请确认游戏来源有信号且 OBS 预览已启用。");
-                return await Task.Run(() => CreateFrame(bitmap, game, source.Title, crop), token);
+                if (bounds is null || bounds != CaptureGeometry.Read(source.Handle, clientOnly)
+                    || Math.Abs(bounds.Width - bitmap.Width) > 2 || Math.Abs(bounds.Height - bitmap.Height) > 2)
+                    throw new InvalidOperationException("窗口正在移动或缩放，请待画面稳定后重新识别。");
+                var frame = await Task.Run(() => CreateFrame(bitmap, game, source.Title, crop), token);
+                return frame with { DesktopBounds = bounds, CapturedClientOnly = clientOnly, SourceKey = source.Key };
             }
         }
         catch { CloseSession(); throw; }
@@ -178,6 +186,7 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern int GetWindowText(nint handle, StringBuilder text, int count);
     [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(nint handle, out uint processId);
     [DllImport("user32.dll")] internal static extern bool GetClientRect(nint handle, out RECT rect);
+    [DllImport("user32.dll")] internal static extern bool ClientToScreen(nint handle, ref POINT point);
     [DllImport("user32.dll")] internal static extern bool PrintWindow(nint handle, nint dc, uint flags);
     [DllImport("user32.dll")] internal static extern nint SetThreadDpiAwarenessContext(nint value);
     [DllImport("d3d11.dll")] internal static extern int CreateDirect3D11DeviceFromDXGIDevice(nint dxgi, out nint device);
@@ -185,6 +194,7 @@ internal static class Native
     [DllImport("combase.dll")] private static extern int WindowsDeleteString(nint hstring);
     [DllImport("combase.dll")] private static extern int RoGetActivationFactory(nint hstring, ref Guid iid, out nint factory);
     [StructLayout(LayoutKind.Sequential)] internal struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] internal struct POINT { public int X, Y; }
     internal static unsafe GraphicsCaptureItem CreateCaptureItem(nint handle)
     {
         const string name = "Windows.Graphics.Capture.GraphicsCaptureItem";

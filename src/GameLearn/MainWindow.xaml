@@ -17,8 +17,8 @@
       <StackPanel>
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="160"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}" ToolTip="选择 OBS 捕获源、输出画面或普通游戏窗口" MinWidth="180"/>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,12,0"><Button Content="连接 OBS" Click="ConnectObs_Click" Margin="0,0,6,0"/><Button Content="刷新" Click="RefreshSources_Click"/></StackPanel>
+        <TextBlock Text="{Binding SelectedSource.Title, TargetNullValue=请选择画面来源}" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedSource.SelectionHint}"/>
+        <Button Grid.Column="1" Content="更换来源" Click="ChooseSource_Click" Margin="8,0,12,0"/>
         <TextBox Grid.Column="2" Text="{Binding GameName, UpdateSourceTrigger=LostFocus}" ToolTip="游戏名称，用于分类场景"/>
         <Button Grid.Column="3" Content="预览" Click="Preview_Click" Margin="12,0,8,0"/>
         <Button Grid.Column="4" Content="识别当前画面" Style="{StaticResource Primary}" Click="Recognize_Click"/>

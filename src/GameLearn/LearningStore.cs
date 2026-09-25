@@ -57,6 +57,7 @@ public sealed class LearningStore : IDisposable
             CREATE TABLE IF NOT EXISTS encounters(id INTEGER PRIMARY KEY, word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE, scene_id TEXT NOT NULL REFERENCES scenes(id), observed TEXT NOT NULL, sentence TEXT NOT NULL, x REAL,y REAL,w REAL,h REAL, UNIQUE(word_id,scene_id));
             CREATE INDEX IF NOT EXISTS ix_encounters_word ON encounters(word_id,id DESC);
             CREATE TABLE IF NOT EXISTS explanations(cache_key TEXT PRIMARY KEY, explanation TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS recent_recognitions(id INTEGER PRIMARY KEY, game TEXT NOT NULL, source TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
             PRAGMA user_version=1;
             """;
         cmd.ExecuteNonQuery();
@@ -76,6 +77,29 @@ public sealed class LearningStore : IDisposable
         using var reader = cmd.ExecuteReader(); var list = new List<SavedWord>();
         while (reader.Read()) list.Add(new(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetBoolean(4), reader.GetString(5), reader.GetInt32(6), reader.GetString(7)));
         return list;
+    }
+    public void SaveRecentRecognition(RecognitionResult result)
+    {
+        var text = string.Join("\n", result.Lines.Where(l => l.Words.Any()).Select(l => l.Text.Trim()));
+        if (string.IsNullOrWhiteSpace(text)) return;
+        using var transaction = db.BeginTransaction();
+        using var cmd = db.CreateCommand(); cmd.Transaction = transaction;
+        cmd.CommandText = "SELECT game,source,text FROM recent_recognitions ORDER BY id DESC LIMIT 1";
+        using (var r = cmd.ExecuteReader())
+            if (r.Read() && r.GetString(0) == result.Frame.Game && r.GetString(1) == result.Frame.Source && r.GetString(2) == text) return;
+        cmd.CommandText = "INSERT INTO recent_recognitions(game,source,at,text) VALUES($g,$s,$a,$t); DELETE FROM recent_recognitions WHERE id NOT IN (SELECT id FROM recent_recognitions ORDER BY id DESC LIMIT 200);";
+        cmd.Parameters.AddWithValue("$g", result.Frame.Game); cmd.Parameters.AddWithValue("$s", result.Frame.Source);
+        cmd.Parameters.AddWithValue("$a", result.Frame.Timestamp.ToString("O")); cmd.Parameters.AddWithValue("$t", text);
+        cmd.ExecuteNonQuery(); transaction.Commit();
+    }
+    public IReadOnlyList<RecentRecognition> RecentRecognitions(string search = "")
+    {
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT id,game,source,at,text FROM recent_recognitions WHERE text LIKE $q OR game LIKE $q ORDER BY id DESC LIMIT 200";
+        cmd.Parameters.AddWithValue("$q", "%" + search + "%");
+        using var r = cmd.ExecuteReader(); var rows = new List<RecentRecognition>();
+        while (r.Read()) rows.Add(new(r.GetInt64(0), r.GetString(1), r.GetString(2), DateTimeOffset.Parse(r.GetString(3)), r.GetString(4)));
+        return rows;
     }
     public IReadOnlyList<Encounter> History(long wordId)
     {
@@ -122,7 +146,7 @@ public sealed class LearningStore : IDisposable
     }
     public void Clear()
     {
-        using var cmd = db.CreateCommand(); cmd.CommandText = "DELETE FROM words; DELETE FROM explanations;"; cmd.ExecuteNonQuery(); CleanupUnusedScenes();
+        using var cmd = db.CreateCommand(); cmd.CommandText = "DELETE FROM words; DELETE FROM explanations; DELETE FROM recent_recognitions;"; cmd.ExecuteNonQuery(); CleanupUnusedScenes();
     }
     public void CleanupUnusedScenes()
     {
@@ -158,7 +182,7 @@ public sealed class EncounterTracker(LearningStore store, OfflineDictionary dict
         var word = store.EnsureWord(dictionary.Lookup(observed));
         var last = store.History(word.Id).FirstOrDefault(e => e.Game == frame.Game);
         seen[(word.Id, frame.Game)] = (frame.Timestamp, line.Text, null);
-        if (last is not null && last.Sentence == line.Text && frame.Timestamp - last.At < TimeSpan.FromMinutes(5)) return last;
+        if (last is not null && last.Sentence == line.Text && frame.Timestamp >= last.At && frame.Timestamp - last.At < TimeSpan.FromMinutes(5)) return last;
         return store.SaveEncounter(word, observed, line, frame);
     }
     public IReadOnlyList<Recall> Observe(RecognitionResult result, TriggerKind trigger)

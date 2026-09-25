@@ -35,6 +35,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
     private CancellationTokenSource? automaticCapture;
     private DateTimeOffset nextAutomatic;
+    private int automaticFailures;
+    public DateTimeOffset? AutomaticRetryAt { get; private set; }
     private long manualSequence;
     private bool disposed;
     private bool refreshingWords;
@@ -58,6 +60,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public event Action<Recall>? RecallAvailable;
     public event Action? FrameChanged;
     public event Action? AutomaticChanged;
+    public event Action<RecognitionResult>? RecognitionAvailable;
+    public event Action? RecognitionUnavailable;
     private WindowSource? selectedSource;
     public WindowSource? SelectedSource
     {
@@ -102,6 +106,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (value && Settings.Engine == OcrEngineKind.PaddleCloud && string.IsNullOrWhiteSpace(AppSettings.Unprotect(Settings.OcrSecret)))
             { Status = "请先填写官方 OCR 令牌并保存设置。"; Raise(); return; }
             Scheduler.SetAutomatic(value); Settings.AutoEnabled = value; Settings.Save();
+            automaticFailures = 0; AutomaticRetryAt = null;
             if (!value) automaticCapture?.Cancel(); else nextAutomatic = DateTimeOffset.MinValue;
             if (!value) { deferredAutomatic = null; deferredAutomaticStatus = null; }
             captureStop = capture.SetContinuousAsync(value);
@@ -181,14 +186,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Scheduler.IsCurrent(request) || disposed) return;
             if (request.TestOnly) { Status = $"官方 API 测试成功 · {result.Lines.Count} 行文字 · {result.Elapsed.TotalSeconds:0.0} 秒"; return; }
+            var recovered = automaticFailures > 0;
+            automaticFailures = 0; AutomaticRetryAt = null; deferredAutomaticStatus = null;
+            Store.SaveRecentRecognition(result);
             var recalls = tracker.Observe(result, request.Trigger);
             if (recalls.Count > 0)
             {
                 LastRecall = recalls[0];
                 if (request.Trigger == TriggerKind.Automatic && !presentation.IsHeld) RecallAvailable?.Invoke(recalls[0]);
             }
+            RecognitionAvailable?.Invoke(result);
             if (request.Trigger == TriggerKind.Automatic && presentation.IsHeld)
             {
+                if (recovered) Status = "自动识别已恢复 · 当前面板仍固定，避免打断操作";
                 // Keep the displayed frame and every bound collection untouched. Only the newest result is retained.
                 deferredAutomatic = (request, result); return;
             }
@@ -198,9 +208,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         };
         Scheduler.Failed += (error, trigger) =>
         {
+            if (trigger == TriggerKind.Automatic && IsAutomatic) { HandleAutomaticFailure(error, true); return; }
             var previousStatus = Status;
             var message = error.Message;
-            if (error is not OcrRateLimitException && trigger == TriggerKind.Automatic && IsAutomatic) { IsAutomatic = false; message = "自动识别已暂停：" + error.Message; }
             if (trigger == TriggerKind.Automatic && presentation.IsHeld) { Status = previousStatus; deferredAutomaticStatus = message; }
             else Status = message;
         };
@@ -243,7 +253,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         refreshingSources = true;
         try { Sources.Clear(); foreach (var source in obsSources.Concat(CaptureService.ListWindows())) Sources.Add(source); }
         finally { refreshingSources = false; }
-        SelectedSource = Sources.FirstOrDefault(s => s.Key == key) ?? Sources.FirstOrDefault();
+        SelectedSource = Sources.FirstOrDefault(s => s.Key == key);
         Raise(nameof(SelectedSource));
     }
     public async Task ConnectObsAsync(bool selectPreferred = true)
@@ -361,8 +371,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             await Scheduler.EnqueueAsync(new(frame, TriggerKind.Automatic, generation, provider));
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { IsAutomatic = false; Status = "自动识别已暂停：" + e.Message; }
+        catch (Exception e)
+        {
+            if (!disposed && IsAutomatic && generation == Scheduler.Generation && !cancellation.IsCancellationRequested)
+                HandleAutomaticFailure(e, false);
+        }
         finally { automaticCapture = null; }
+    }
+    internal void HandleAutomaticFailure(Exception error, bool fromOcr)
+    {
+        if (!IsAutomatic || disposed) return;
+        deferredAutomatic = null; deferredAutomaticStatus = null;
+        RecognitionUnavailable?.Invoke();
+        var delay = AutomaticRecovery.Delay(error, ++automaticFailures, fromOcr && Settings.Engine == OcrEngineKind.PaddleCloud);
+        if (delay is null)
+        {
+            IsAutomatic = false;
+            Status = "自动识别需手动处理：" + error.Message;
+            if (fromOcr && Settings.Engine == OcrEngineKind.PaddleCloud && error is not OcrAuthenticationException)
+                Status += " · 在线任务状态未确认，不自动重复提交。";
+            return;
+        }
+        AutomaticRetryAt = nextAutomatic = DateTimeOffset.UtcNow + delay.Value;
+        Status = $"自动识别等待恢复 · {Math.Ceiling(delay.Value.TotalSeconds)} 秒后重试：{error.Message}";
     }
     public void Present(RecognitionResult result)
     {
@@ -372,8 +403,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public void Learn(string observed)
     {
         if (Frame is null || SelectedLine is null || string.IsNullOrWhiteSpace(observed)) return;
+        LearnCaptured(observed, SceneContext.ForLine(Result, SelectedLine), Frame);
+    }
+    internal void LearnCaptured(string observed, RecognizedLine line, CapturedFrame frame)
+    {
         if (!System.Text.RegularExpressions.Regex.IsMatch(observed, "^[A-Za-z]+(?:['’\\-][A-Za-z]+)*$")) { Status = "请输入一个英文单词，可包含连字符或撇号。"; return; }
-        var encounter = tracker.Learn(observed, SceneContext.ForLine(Result, SelectedLine), Frame);
+        var encounter = tracker.Learn(observed, line, frame);
         Search = ""; GameFilter = "全部游戏"; RefreshWords();
         SelectedWord = Words.FirstOrDefault(w => w.Word == encounter.Word); SelectedEncounter = encounter;
         Status = $"已保存 {observed} · 词义、原句和场景已关联";

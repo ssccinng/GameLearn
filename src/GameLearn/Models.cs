@@ -10,6 +10,13 @@ public enum CaptureSourceKind { Window, ObsProgram, ObsScene, ObsInput }
 public record WindowSource(nint Handle, string Title, string ProcessName, CaptureSourceKind Kind = CaptureSourceKind.Window, string? ObsName = null, bool IsActive = false)
 {
     public bool IsObs => Kind != CaptureSourceKind.Window;
+    public bool IsObsProjector => Kind == CaptureSourceKind.Window && ProcessName.Equals("obs64", StringComparison.OrdinalIgnoreCase)
+        && (Title.Contains("Projector", StringComparison.OrdinalIgnoreCase) || Title.Contains("投影", StringComparison.OrdinalIgnoreCase)
+            || Title.Contains("投射", StringComparison.OrdinalIgnoreCase));
+    public string SelectionHint => IsObsProjector ? "OBS 投影 · 窗口 / 全屏均可画面选词"
+        : IsObs ? "OBS 纯画面 · 悬浮栏查词，无桌面位置"
+        : ProcessName.Equals("obs64", StringComparison.OrdinalIgnoreCase) ? "OBS 界面窗口 · 建议选择投影或纯画面来源"
+        : "窗口画面 · 支持画面选词";
     public string Key => IsObs ? $"{Kind}:{ObsName}" : $"window:{Handle}";
     public override string ToString() => Kind switch
     {
@@ -24,6 +31,9 @@ public record CropRegion(double X, double Y, double Width, double Height);
 public record CapturedFrame(Guid Id, DateTimeOffset Timestamp, string Game, string Source,
     byte[] FullPng, byte[] OcrPng, int Width, int Height, PixelRect Region, string Fingerprint)
 {
+    public PixelRect? DesktopBounds { get; init; }
+    public bool CapturedClientOnly { get; init; }
+    public string? SourceKey { get; init; }
     public static BitmapImage Image(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes);
@@ -34,11 +44,13 @@ public record CapturedFrame(Guid Id, DateTimeOffset Timestamp, string Game, stri
 }
 public record RecognizedLine(string Text, double Confidence, PixelRect Bounds)
 {
+    public IReadOnlyList<RecognizedLine>? Fragments { get; init; }
     public IEnumerable<string> Words => Regex.Matches(Text, @"[A-Za-z]+(?:['’\-][A-Za-z]+)*").Select(m => m.Value);
 }
 public sealed record PrioritizedLine(RecognizedLine Line, IReadOnlyList<string> Words, double Score, int PriorityLevel, string PriorityLabel, Brush CardBrush)
 {
     public string Text => Line.Text;
+    public IReadOnlyList<string> DisplayWords => Regex.Matches(Text, @"\S+").Select(m => m.Value).ToArray();
 }
 public static class LearningPriority
 {
@@ -60,13 +72,13 @@ public static class LearningPriority
             if (CommonWords.Contains(normalized)) score += 0.05;
             else if (saved.TryGetValue(normalized, out var known)) score += known.Mastered ? 0.15 : 1.0;
             else score += 2.25;
-            if (entry.Translation.Contains("未收录", StringComparison.Ordinal)) score += 2.5;
+            if (entry.Translation.Contains("未收录", StringComparison.Ordinal)) score -= 2.0;
             if (normalized.Length >= 8) score += 0.85;
             else if (normalized.Length >= 6) score += 0.35;
             if (observed.Contains('-') || observed.Contains('\'') || observed.Contains('’')) score += 0.35;
         }
         score += Math.Min(1.5, Math.Max(0, words.Length - 4) * 0.18);
-        score += Math.Max(0, 0.92 - line.Confidence) * 2.0;
+        score *= Math.Clamp(line.Confidence, 0, 1);
         var level = score >= 8 ? 3 : score >= 4 ? 2 : score >= 1.5 ? 1 : 0;
         var label = level switch { 3 => "优先学习", 2 => "值得看看", 1 => "可以复习", _ => "轻松复习" };
         var color = level switch
@@ -101,6 +113,7 @@ public record DictionaryEntry(string Word, string Phonetic, string Translation, 
 public record SavedWord(long Id, string Word, string Phonetic, string Translation, bool Mastered, string Notes, int Encounters, string LastGame);
 public record Encounter(long Id, string Word, string Observed, string Sentence, string Game, DateTimeOffset At, string ImagePath, PixelRect Bounds);
 public record Recall(SavedWord Word, Encounter Previous, Encounter Current);
+public record RecentRecognition(long Id, string Game, string Source, DateTimeOffset At, string Text);
 public record RecognitionRequest(CapturedFrame Frame, TriggerKind Trigger, long Generation, IOcrProvider Provider, bool TestOnly = false);
 
 public interface IOcrProvider

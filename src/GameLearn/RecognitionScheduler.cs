@@ -70,7 +70,11 @@ public sealed class RecognitionScheduler : IDisposable
                     RecognitionResult result;
                     if (request.Trigger == TriggerKind.Automatic && cached?.Frame.Fingerprint == request.Frame.Fingerprint && cachedEngine == request.Provider.Name)
                         result = cached with { Frame = request.Frame, Elapsed = TimeSpan.Zero };
-                    else result = await request.Provider.RecognizeAsync(request.Frame, cancellation.Token);
+                    else
+                    {
+                        result = await request.Provider.RecognizeAsync(request.Frame, cancellation.Token);
+                        result = result with { Lines = SentenceAssembler.Merge(result.Lines) };
+                    }
                     if (!cancellation.IsCancellationRequested && IsCurrent(request))
                     {
                         cached = result; cachedEngine = request.Provider.Name;

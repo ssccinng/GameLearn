@@ -19,6 +19,71 @@ void Assert(bool condition, string message) { if (!condition) throw new Exceptio
 CapturedFrame Frame(string sentence = "a", DateTimeOffset? at = null, string game = "Test game") => new(Guid.NewGuid(), at ?? DateTimeOffset.UtcNow, game, "fixture", new byte[] { 1, 2 }, new byte[] { 3 }, 800, 600, new(100, 200, 300, 200), sentence);
 RecognitionResult Result(CapturedFrame frame, string sentence = "The wrecked ship.") => new(frame, new[] { new RecognizedLine(sentence, 0.99, new(100, 200, 150, 20)) }, "fake", TimeSpan.FromMilliseconds(1));
 
+await Test("Automatic recovery: backoff, rate limits and permanent/uncertain failures", () =>
+{
+    Assert(AutomaticRecovery.Delay(new InvalidOperationException("black frame"), 1, false) == TimeSpan.FromSeconds(2), "capture not retried");
+    Assert(AutomaticRecovery.Delay(new TimeoutException(), 20, false) == TimeSpan.FromSeconds(30), "unbounded backoff");
+    Assert(AutomaticRecovery.Delay(new OcrRateLimitException(TimeSpan.FromSeconds(75)), 1, true) == TimeSpan.FromSeconds(75), "retry-after ignored");
+    Assert(AutomaticRecovery.Delay(new OcrAuthenticationException(), 1, true) is null, "auth loop");
+    Assert(AutomaticRecovery.Delay(new TimeoutException(), 1, true) is null, "ambiguous cloud submission repeated");
+    Assert(AutomaticRecovery.Delay(new FileNotFoundException(), 1, false) is null, "missing model loop");
+    return Task.CompletedTask;
+});
+await Test("Recent OCR: consecutive dedup, retention, persistence, no unqueried vocabulary", () =>
+{
+    var directory = Path.Combine(Path.GetTempPath(), "GameLearn-recent-" + Guid.NewGuid());
+    using (var store = new LearningStore(directory))
+    {
+        store.SaveRecentRecognition(Result(Frame(), "The wrecked ship."));
+        store.SaveRecentRecognition(Result(Frame(), "The wrecked ship."));
+        Assert(store.RecentRecognitions().Count == 1 && store.Words().Count == 0, "duplicate or unsolicited saved word");
+        for (var i = 0; i < 205; i++) store.SaveRecentRecognition(Result(Frame(), "Different sentence " + i));
+        Assert(store.RecentRecognitions().Count == 200 && store.RecentRecognitions()[0].Text == "Different sentence 204", "retention/order incorrect");
+    }
+    using (var store = new LearningStore(directory))
+    {
+        Assert(store.RecentRecognitions("204").Count == 1, "history lost on restart or search incorrect");
+        store.Clear(); Assert(store.RecentRecognitions().Count == 0, "clear records omitted recent history");
+    }
+    return Task.CompletedTask;
+});
+await Test("Projector classification and black-bar coordinates at mixed DPI", () =>
+{
+    Assert(new WindowSource(1, "Fullscreen Projector (Preview)", "obs64").IsObsProjector, "English projector missing");
+    Assert(new WindowSource(1, "全屏投影（场景）", "obs64").IsObsProjector, "Chinese projector missing");
+    Assert(!new WindowSource(1, "OBS Studio", "obs64").IsObsProjector, "OBS interface classified as projector");
+    Assert(CaptureGeometry.Map(new(200, 800, 600, 40), 1920, 1080, 1536, 864) == new PixelRect(160, 640, 480, 32), "DPI/letterbox mapping incorrect");
+    return Task.CompletedTask;
+});
+await Test("Sentence layout: fragments and wrapped dialogue merge with screenshot bounds", () =>
+{
+    var lines = SentenceAssembler.Merge(new[] {
+        new RecognizedLine("The wrecked", .99, new(40, 100, 120, 20)),
+        new RecognizedLine("ship needs", .97, new(170, 100, 130, 20)),
+        new RecognizedLine("a little elbow grease.", .98, new(40, 126, 240, 20)) });
+    Assert(lines.Count == 1 && lines[0].Text == "The wrecked ship needs a little elbow grease.", "wrapped sentence remained split");
+    Assert(lines[0].Fragments is { Count: 3 } fragments && fragments[1].Bounds.Y == 100, "merged sentence lost original word regions");
+    Assert(lines[0].Bounds == new PixelRect(40, 100, 260, 46) && lines[0].Confidence == .97, "scene bounds/confidence lost");
+    Assert(SentenceAssembler.Merge(lines).SequenceEqual(lines), "merging changed an already assembled sentence");
+    return Task.CompletedTask;
+});
+await Test("Sentence layout: speaker, menu, columns and completed sentences stay separate", () =>
+{
+    foreach (var pair in new[] {
+        new[] { new RecognizedLine("Valdi", .99, new(40, 100, 50, 20)), new RecognizedLine("The wrecked ship", .99, new(40, 125, 240, 20)) },
+        new[] { new RecognizedLine("Load game", .99, new(40, 100, 180, 20)), new RecognizedLine("New game", .99, new(40, 125, 180, 20)) },
+        new[] { new RecognizedLine("The wrecked ship", .99, new(40, 100, 240, 20)), new RecognizedLine("Inventory", .99, new(500, 125, 200, 20)) },
+        new[] { new RecognizedLine("We are ready.", .99, new(40, 100, 240, 20)), new RecognizedLine("Let us go.", .99, new(40, 125, 240, 20)) } })
+        Assert(SentenceAssembler.Merge(pair).Count == 2, "unrelated UI text was joined");
+    return Task.CompletedTask;
+});
+await Test("Sentence display: punctuation and repeated words survive", () =>
+{
+    using var dictionary = new OfflineDictionary(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".sqlite"));
+    var line = LearningPriority.Score(new("You, you can do it!", .99, new(0, 0, 200, 20)), dictionary, new Dictionary<string, SavedWord>());
+    Assert(string.Join(" ", line.DisplayWords) == "You, you can do it!", "display removed punctuation or repeated words");
+    return Task.CompletedTask;
+});
 await Test("Cloud: multipart PP-OCRv6, pending/done, signed JSONL without token", async () =>
 {
     var calls = new List<string>();
