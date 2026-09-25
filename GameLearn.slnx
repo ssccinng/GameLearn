@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GameLearn/GameLearn.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GameLearn.Tests/GameLearn.Tests.csproj" />
+  </Folder>
+</Solution>

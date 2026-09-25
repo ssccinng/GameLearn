@@ -1,0 +1,171 @@
+# GameLearn · 游戏罪恶减轻器
+
+> 玩游戏不等于浪费时间。GameLearn 把游戏里的英文留下来，让每个生词都变成下一次更懂剧情的理由。
+
+GameLearn 是一款 Windows 游戏英语学习工具：识别英文、离线查词、保存原句与场景截图，并在再次遇见单词时回忆上次的场景。
+
+当前版本：`v0.1.0` · 产品名：**游戏罪恶减轻器**
+
+## 运行
+
+打开 `publish/GameLearn/GameLearn.exe`。交付目录包含 .NET 运行时、OCR 模型和 770,611 条 ECDICT 词典数据，无需 Python、系统英文 OCR 语言包或 API 密钥即可使用本地功能。请保留整个目录，不要单独移动 EXE。
+
+使用 OBS 时，点击“连接 OBS”，在来源中选择 `OBS 捕获源 · ns` 这样的游戏源，或 `OBS · 当前输出画面（纯画面）`，然后点击“识别当前画面”。不需要投影窗口或截取整个 OBS 界面；OBS 被遮挡或最小化仍可读取纯画面。也支持普通游戏窗口，以及先预览再框选对话区域。
+
+## 直接读取 OBS 捕获源
+
+OBS 28+ 内置 obs-websocket。首次连接需在 OBS → Tools（工具）→ WebSocket Server Settings 勾选 Enable WebSocket server。保留密码认证即可：GameLearn 默认从本机 OBS 配置读取端口和密码，仅连接 `127.0.0.1`，不会把 OBS 密码发送给 OCR 或 AI 服务，也不会将本机密码复制进项目文件。
+
+**如果 OBS 标题带有 SAFE MODE，WebSocket 模块不会加载，菜单中也没有这个设置。请以普通模式重新启动 OBS；需要避免第三方插件时，可用 `--only-bundled-plugins` 启动，它仍会加载内置 WebSocket 模块。**
+
+连接后，来源下拉框包含：
+
+- `OBS 捕获源 · 名称`：该输入源的原始画面，不含 OBS 控件，也不含其他场景叠加层。当前场景中的可见捕获源带有标记，优先推荐游戏捕获或视频设备。
+- `OBS · 当前输出画面（纯画面）`：跟随 OBS 当前 Program 场景，保留该场景内的字幕、布局等合成效果，仍不含 OBS 软件界面。
+- `OBS 场景 · 名称`：固定读取某个场景。
+- 普通窗口来源：继续支持原来的窗口捕获，OBS 主窗口明确标记为“界面窗口”。
+
+程序会记住上次选择的 OBS 来源。刷新按钮更新来源清单；需要自定义连接时，在设置中关闭“读取本机 OBS 的连接配置”，填写本机端口和密码，再点“保存并连接 OBS”。手动填写的密码使用 DPAPI 加密保存。便携版 OBS 或非默认配置目录可采用手动连接。
+
+读取使用 `GetSourceScreenshot`，与截图识别快捷键、自动模式、离线 OCR、在线 PP-OCRv6、区域选择和场景历史共用同一流程。关闭自动模式后不再请求截图；OBS 断开或来源失效会报错，不会悄悄换成截取整个 OBS 界面。GameLearn 不切换 OBS 场景、不开始或停止录制/直播、不修改捕获源。
+
+## 悬浮栏模式
+
+点击主界面右上角的“悬浮栏”，主窗口收起，显示置顶小工具条。也可以从系统托盘选择“显示悬浮栏”。
+
+- 拖动左侧点状把手移动悬浮栏；位置会保存，并在显示器布局变化后限制到可见屏幕区域。
+- 悬浮窗下半部分直接按原句展示识别到的英文词按钮，显示识别时间和词数；多行内容可滚动查看，无需先打开其他窗口。点击任意单词即可查看释义并保存对应场景。
+- “识别”抓取当前选定的游戏来源，结果直接留在悬浮窗内；浮窗收起时会展开。“自动”与主窗口、托盘使用同一个自动识别开关；“回忆”查看上次遇见的场景。
+- “展开”回到完整主界面，使用单词本和设置；`‹` 收起为小型 GL 按钮，单击 GL 展开，拖动 GL 移动。
+- `×` 隐藏到托盘，不退出程序；从托盘可恢复悬浮栏或退出。
+- 悬浮栏设置了不激活窗口的原生样式，显示、拖动和切换自动模式不主动抢走游戏焦点。主动查词打开的面板可正常获得焦点以便编辑。
+- 悬浮模式的查词面板为 460×680 的小窗口，默认在悬浮栏附近显示；“当前画面 · 点词”和“释义与场景”两个页面共享原有单词本、截图和备注功能。
+- 悬浮栏同样应用操作保护：鼠标操作时不替换正在查看的截图和列表；查词面板关闭或最小化后恢复最新自动结果。
+- 鼠标进入词区、点击和滚动时会固定原句与词按钮。后台的新结果只暂存，点击旧按钮不会误关联到新截图；没有英文或尚未识别时给出明确提示。
+- 模式、折叠状态和位置会保存。下次启动记住的悬浮模式时，不先闪现大窗口；也可用 `GameLearn.exe --floating` 直接进入。
+
+桌面悬浮适用于窗口化或无边框游戏；独占全屏的显示由游戏和 Windows 决定。
+
+| 快捷键 | 用途 |
+| --- | --- |
+| `Ctrl+Alt+E` | 抓取当前所选窗口并识别，打开点词面板 |
+| `Ctrl+Alt+A` | 开启 / 关闭自动识别 |
+| `Ctrl+Alt+R` | 展开最近提示对应的上次遇见 |
+| `Esc` | 关闭查词或场景放大窗口 |
+
+快捷键可在设置中修改。每个快捷键独立注册：例如 `Ctrl+Alt+A` 或 `Ctrl+Alt+R` 被其他程序占用，不会导致可用的 `Ctrl+Alt+E` 失效。顶部持续显示冲突提示，设置页显示每个快捷键的实际启用状态；修改失败时尽可能保留该动作之前可用的快捷键。不可用的自动开关和场景回忆仍可通过界面与托盘使用。
+
+## 识别和学习
+
+- 操作保护：鼠标位于工具窗口内、拖动/滚动、输入或选择内容、打开查词面板、框选区域或查看放大场景时，自动结果不会替换当前截图、原句、词按钮和历史列表，也不弹回忆提示。界面显示“操作中 · 已固定画面与列表”。
+- 后台识别与遇词记录仍可继续，界面最多暂存最新一帧。离开工具返回游戏、结束编辑或关闭相关面板后，只应用最新有效结果；已关闭自动模式或已切换来源的旧结果会丢弃。
+- 主动点击“预览”“识别当前画面”或按识别快捷键仍立即响应。查词始终关联屏幕上正在展示的截图。未变化的自动结果不再重建原句列表；后台更新遇见次数不会重写备注、清空解释或切换已选历史。
+- 每次启动从暂停状态开始，防止对过期的窗口句柄启动自动捕获。主窗口与系统托盘都能切换自动模式。
+- 关闭自动模式后不再后台采样或上传；即时识别快捷键仍然可用。
+- 自动模式本地默认间隔 1 秒，在线默认最短间隔 5 秒；任务串行执行，未变化的截图复用识别结果。
+- OBS 优先使用 `PrintWindow`，不会反复显示系统捕获边框。其他窗口的自动模式复用同一个 Windows Graphics Capture 会话；系统可能保留稳定的捕获提示边框，但不再每次截图开关闪烁。关闭自动模式、切换来源或退出时释放会话；窗口缩放只更新帧缓冲。
+- 按键时保留当前截图。OCR 正忙时，最多排队最新的一次手动请求。切换来源、区域或引擎后取消旧任务并丢弃过期结果。
+- 点击截图中的文字框选择原句，再点击下面的单词查询；可以手动修正误识别的单词。
+- 查词自动收藏。保存词形、释义、附近多行原句、时间、游戏名和完整窗口截图；识别区域不会裁掉保存的完整场景。
+- 只追踪查过的词；持续显示的同一段对话不重复收藏。自动模式确认单词消失 10 秒再出现，或原句变化时，新增场景。手动模式中相同游戏、单词、原句在 5 分钟内合并。
+- 自动再次遇见会显示不抢焦点的角落提示；每词至少间隔 5 分钟。已掌握的词不提醒，仍可查看历史。
+- 单词本支持搜索、按游戏筛选、备注、已掌握状态、词条删除和历史时间线。点击历史截图可放大查看高亮原句。
+- 最小化主窗口可继续后台运行，关闭主窗口会退出并释放快捷键、托盘和捕获资源。游戏源窗口最小化或失效时自动暂停。
+
+## 官方 PP-OCRv6
+
+设置中选择“官方 PP-OCRv6 API”，填写 AI Studio Access Token，保存后即可搭配自动或快捷键模式。点击“保存并用当前区域测试官方 API”会上传一次当前选定区域的真实截图。
+
+- 固定使用官方服务 `https://paddleocr.aistudio-app.com`，模型 `PP-OCRv6`。
+- 使用官方 multipart 文件上传和异步任务协议：`POST /api/v2/ocr/jobs` → `GET /api/v2/ocr/jobs/{jobId}` → 下载 JSONL 结果。
+- 默认总超时 30 秒，可配置 5–600 秒。限流按 `Retry-After` 暂停，包括已经排队的请求；其他自动任务错误暂停自动识别，不盲目重新提交。
+- 关闭自动识别会取消本地等待并忽略旧结果，不能撤销已经提交到服务端的任务。
+- 云端上传范围是所选窗口或框选区域。结果文件下载不会携带用户令牌。返回行级坐标时高亮整行，不伪造单词级位置。
+- 访问令牌与 AI 翻译密钥独立，用 Windows DPAPI 按当前用户加密保存。
+
+[官方 SDK 与协议说明](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/inference_deployment/serving/paddleocr_official_api/python.md)
+
+## 可选 AI 语境解释
+
+设置兼容 Chat Completions 的 HTTP/HTTPS 服务地址、模型名和密钥。地址支持三种写法：
+
+- 服务根地址，如 `http://host:port`：自动补上 `/v1/chat/completions`。
+- 基础路径，如 `https://host/v1` 或 `https://host/relay/v1`：追加 `/chat/completions`。
+- 完整接口，如 `https://host/v1/chat/completions`：直接使用，不重复追加路径。
+
+AI 区域有独立的“保存 AI 配置”和“保存并测试 AI”按钮，不受尚未填好的 OCR、OBS 或快捷键表单影响。保存成功立即更新运行配置；测试发送一条固定的简短连接测试消息，绕过解释缓存，在表单旁显示成功、耗时或具体失败原因。测试不发送游戏截图和学习记录。
+
+点击单词详情的“解释当前语境”后，只发送单词和相邻原句，不发送截图。按规范化后的服务接口、模型、单词及语境缓存结果；更换配置会取消旧配置的请求，避免迟到结果覆盖新配置。失败不影响离线查词。HTTP 连接不加密，HTTPS 连接加密；服务的计费与配额由对应服务商决定。
+
+## 数据
+
+默认位置：`%LOCALAPPDATA%\GameLearn`。
+
+- `learning.db`：SQLite 单词、场景索引、历史和解释缓存。
+- `scenes/`：学习时保留的完整截图，同一帧由多个词共享。
+- `settings.json`：设置及加密后的凭证。
+- `errors.log`：界面未处理异常的类型与消息，不记录 API 请求头。
+
+设置中可以打开数据目录、清理未引用截图或清空学习记录。删除词条会清理不再被其他词使用的场景。备份时退出程序后复制整个数据目录；DPAPI 凭证仅在原 Windows 用户环境中可解密。
+
+## 开发与测试
+
+需要 Windows x64 与 .NET 10 SDK，解决方案为 `GameLearn.slnx`。程序使用 WPF、Windows Graphics Capture、Vortice.Direct3D11、RapidOcrNet / ONNX Runtime、Microsoft.Data.Sqlite。
+
+```powershell
+dotnet build GameLearn.slnx
+dotnet run --project tests/GameLearn.Tests -- artifacts/test-results.json
+dotnet run --project src/GameLearn
+```
+
+测试项目是返回标准退出码的控制台验证程序，失败时退出码为 1，同时输出 JSON 报告；不使用 `dotnet test`。
+
+词典已随源码附带。仅在需要重新构建词典时运行（需 Python 3.9+）：
+
+```powershell
+python scripts/prepare_dictionary.py
+# 如网络需要代理，可以显式传入 --proxy http://host:port
+```
+
+构建脚本固定 ECDICT 数据版本并验证 CSV SHA-256；重新构建仅替换只读词典，不修改用户学习记录。
+
+```powershell
+./scripts/build.ps1 -SelfContained
+```
+
+这会收集第三方声明、运行验证程序并生成包含运行时的 `publish/GameLearn`。不加 `-SelfContained` 可生成依赖已安装 .NET 10 Desktop Runtime 的版本。
+
+诊断工具不会触碰正常学习库；桌面测试使用独立数据目录：
+
+```powershell
+./publish/GameLearn/GameLearn.exe --diagnose --output G:\CSharpDev\GameLearn\artifacts\diagnostics
+./publish/GameLearn/GameLearn.exe --diagnose --integration --output G:\CSharpDev\GameLearn\artifacts\integration
+./publish/GameLearn/GameLearn.exe --diagnose --interaction-regression --output G:\CSharpDev\GameLearn\artifacts\interaction-regression
+./publish/GameLearn/GameLearn.exe --diagnose --obs-direct --output G:\CSharpDev\GameLearn\artifacts\obs-direct
+./publish/GameLearn/GameLearn.exe --diagnose --presentation-regression --output G:\CSharpDev\GameLearn\artifacts\presentation-regression
+./publish/GameLearn/GameLearn.exe --diagnose --floating-regression --output G:\CSharpDev\GameLearn\artifacts\floating-regression
+./publish/GameLearn/GameLearn.exe --diagnose --ai-settings-regression --output G:\CSharpDev\GameLearn\artifacts\ai-settings
+./publish/GameLearn/GameLearn.exe --diagnose --image image.png --crop 0.5,0.1,0.4,0.2 --ui --output G:\CSharpDev\GameLearn\artifacts\ui
+```
+
+`--diagnose` 从当前 OBS 捕获并比较冷启动与预热 OCR；`--collect 10` 可保存十个真实采样；`--integration` 临时打开测试窗口检查实际捕获、查词、自动开关与窗口缩放。图片与原始结果仅保存在指定诊断目录。
+
+`--interaction-regression` 通过 Windows `SendInput` 发送真实测试按键，验证最小化时的全局快捷键、快捷键冲突隔离、连续捕获会话复用、缩放及 OBS 无边框截图。运行时会临时打开测试窗口，并需要独占 `Ctrl+Alt+E`；请先退出正常运行的 GameLearn。
+
+`--obs-direct` 对当前 OBS 捕获源、当前输出画面进行真实读取和 OCR，并临时最小化 OBS 验证后台读取后恢复原窗口状态。
+
+`--presentation-regression` 在 WPF Dispatcher 中验证交互期间的界面状态保护、最新结果缓存和查词截图关联；不打开测试窗口、不模拟鼠标键盘，不打断正在使用的桌面。
+
+`--floating-regression` 在后台创建未显示的控件与原生窗口，检查悬浮栏命令、自动开关绑定、折叠持久化、不激活样式与紧凑查词布局，并渲染预览 PNG；不在用户桌面显示测试窗口。
+
+`--ai-settings-regression` 使用隔离配置和模拟 HTTP 验证 AI 独立保存、密钥加密、配置即时更新及旧请求取消，不发送真实服务请求。`--test-saved-ai` 则会使用当前用户已保存的配置发送一条真实连接测试消息，并输出不含密钥的结果报告。
+
+## 当前边界
+
+- 首版支持 Windows x64。独占全屏、受保护画面和部分特殊渲染窗口可能无法捕获，推荐无边框模式或 OBS 投影。
+- 黑画面和窗口失效会明确报错，不会伪造文本。OBS 的 `PrintWindow` 不可用时回退到 Windows Graphics Capture。
+- 本地 OCR 使用拉丁语系模型；特殊字体、动态字幕和专有名词仍可能识别错误。画面没有变化时不会自动重新请求 OCR，可用快捷键强制重新识别。
+- API 网络功能已做模拟协议和故障测试，真实服务仍需用户提供有效凭证后验证。
+- 暂不包含视频回放、云同步、账户系统和间隔复习算法。
+
+完整验证范围见 `TEST_REPORT.md`，第三方声明见 `src/GameLearn/Assets/licenses/THIRD_PARTY_NOTICES.md`，发行包中为 `Assets/licenses/THIRD_PARTY_NOTICES.md`。
