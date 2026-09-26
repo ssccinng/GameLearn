@@ -44,7 +44,7 @@ internal sealed class WindowInteractionGuard
         if (closed) return;
         var visible = window.IsVisible && window.WindowState != WindowState.Minimized;
         var editing = window.IsActive && HasEditorOrSelectionFocus();
-        vm.SetPresentationInteraction(this, visible && (holdWhileVisible || contextMenuOpen || window.IsMouseOver || window.IsMouseCaptureWithin || editing
+        vm.SetPresentationInteraction(this, visible && (holdWhileVisible || contextMenuOpen || window.IsMouseCaptureWithin || editing
             || (window.IsActive && DateTime.UtcNow - lastInput < TimeSpan.FromSeconds(1))));
     }
     private bool HasEditorOrSelectionFocus()

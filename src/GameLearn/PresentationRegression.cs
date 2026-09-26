@@ -54,7 +54,7 @@ internal static class PresentationRegression
             Check("Automatic statuses and recall toasts do not interrupt interaction", vm.Status == "editing" && notifications == 0);
             Check("Background encounter recording continues independently", vm.Store.History(vm.SelectedWord!.Id).Count == 3);
             vm.SetPresentationInteraction(owner, false); await Flush();
-            Check("Closing one interaction does not unlock another active panel", vm.Frame.Id == a.Frame.Id && vm.IsAutomaticRefreshPaused);
+            Check("Closing one interaction releases the non-permanent lookup marker", vm.Frame.Id == a.Frame.Id && !vm.IsAutomaticRefreshPaused);
             vm.LookupIsOpen = false; await Flush();
             Check("Resume applies only the newest pending frame once", vm.Frame.Id == c.Frame.Id && frameChanges == 2);
             Check("Resume retains draft and selected historical encounter", vm.Notes == "unfinished note" && vm.Mastered && noteChanges == 0 && vm.SelectedEncounter?.Id == encounterId && vm.History.Count == 3 && vm.AiExplanation == explanation);

@@ -50,7 +50,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private int captureOperations;
     private Task captureStop = Task.CompletedTask;
     private readonly PresentationGate presentation = new();
-    private readonly object lookupInteraction = new();
     private (RecognitionRequest Request, RecognitionResult Result)? deferredAutomatic;
     private string? deferredAutomaticStatus;
     public bool IsAutomaticRefreshPaused => presentation.IsHeld;
@@ -259,7 +258,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Settings.AutoEnabled = false;
     }
     private bool lookupIsOpen;
-    public bool LookupIsOpen { get => lookupIsOpen; set { lookupIsOpen = value; presentation.SetHeld(lookupInteraction, value); } }
+    public bool LookupIsOpen { get => lookupIsOpen; set => Set(ref lookupIsOpen, value); }
     private void DisplayRecognition(RecognitionResult result, TriggerKind trigger)
     {
         if (trigger == TriggerKind.Automatic && Frame is not null && result.Frame.Timestamp < Frame.Timestamp) return;
