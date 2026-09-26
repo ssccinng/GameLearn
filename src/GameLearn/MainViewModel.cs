@@ -207,6 +207,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MainViewModel(HttpClient? httpClient = null)
     {
         http = httpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        if (!string.IsNullOrWhiteSpace(Settings.TranslationSecret)) translationStatus = "已加载快速翻译配置 · 点击翻译句子";
         local.PreferTextRegions = Settings.PreferTextRegions;
         if (!string.IsNullOrWhiteSpace(Settings.AiBaseUrl) && !string.IsNullOrWhiteSpace(Settings.AiModel))
             aiConfigurationStatus = $"已加载保存的 AI 配置 · {Settings.AiModel} · 点击测试验证连接。";
@@ -561,6 +562,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public async Task TranslateSentenceAsync()
     {
         if (SelectedEncounter is null || string.IsNullOrWhiteSpace(DetailSentence)) { TranslationStatus = "请先选择一条原句。"; return; }
+        ReloadTranslationSettings();
         var snapshot = Settings.Copy(); var sentence = DetailSentence; var key = SentenceTranslationService.CacheKey(snapshot, sentence);
         try
         {
@@ -574,6 +576,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch (OperationCanceledException) { TranslationStatus = "翻译已取消。"; }
         catch (Exception error) { TranslationStatus = "快速翻译失败：" + error.Message; }
         finally { IsTranslating = false; Raise(nameof(CanTranslate)); }
+    }
+    private void ReloadTranslationSettings()
+    {
+        var saved = AppSettings.Load();
+        Settings.TranslationProvider = saved.TranslationProvider; Settings.TranslationBaseUrl = saved.TranslationBaseUrl;
+        Settings.TranslationSecret = saved.TranslationSecret; Settings.TranslationRegion = saved.TranslationRegion;
+        Settings.TranslationSourceLanguage = saved.TranslationSourceLanguage; Settings.TranslationTargetLanguage = saved.TranslationTargetLanguage;
     }
     public async Task TestCloudAsync()
     {
