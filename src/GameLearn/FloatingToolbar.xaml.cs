@@ -40,6 +40,7 @@ public partial class FloatingToolbar : Window
             source = HwndSource.FromHwnd(handle); source.AddHook(WindowMessage);
         };
         Loaded += (_, _) => RestorePosition();
+        IsVisibleChanged += (_, _) => { if (IsVisible) ToolbarMotion.Enter(IsCollapsed ? CollapsedContent : ExpandedContent); };
         Closed += (_, _) => { vm.FrameChanged -= UpdateVisibleWords; dragging?.Dispose(); dragging = null; source?.RemoveHook(WindowMessage); };
     }
     private nint WindowMessage(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
@@ -54,6 +55,7 @@ public partial class FloatingToolbar : Window
         ExpandedContent.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         CollapsedContent.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
         Width = collapsed ? 64 : 680; Height = collapsed ? 64 : 460;
+        if (IsVisible) ToolbarMotion.Enter(collapsed ? CollapsedContent : ExpandedContent);
         if (!save) return;
         vm.Settings.FloatingBarCollapsed = collapsed;
         if (IsLoaded)
