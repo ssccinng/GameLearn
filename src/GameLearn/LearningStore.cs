@@ -63,6 +63,7 @@ public sealed class LearningStore : IDisposable
             CREATE TABLE IF NOT EXISTS explanations(cache_key TEXT PRIMARY KEY, explanation TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS translations(cache_key TEXT PRIMARY KEY, translation TEXT NOT NULL, at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS recent_recognitions(id INTEGER PRIMARY KEY, game TEXT NOT NULL, source TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS ignored_texts(signature TEXT PRIMARY KEY, sample TEXT NOT NULL, at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS word_metadata(word_id INTEGER PRIMARY KEY REFERENCES words(id) ON DELETE CASCADE,
                 category TEXT NOT NULL DEFAULT '', lookup_count INTEGER NOT NULL DEFAULT 0, view_count INTEGER NOT NULL DEFAULT 0, last_viewed TEXT);
             PRAGMA user_version=1;
@@ -146,6 +147,28 @@ public sealed class LearningStore : IDisposable
         cmd.Parameters.AddWithValue("$rx", result.Frame.Region.X); cmd.Parameters.AddWithValue("$ry", result.Frame.Region.Y); cmd.Parameters.AddWithValue("$rw", result.Frame.Region.Width); cmd.Parameters.AddWithValue("$rh", result.Frame.Region.Height); cmd.Parameters.AddWithValue("$fingerprint", result.Frame.Fingerprint);
         cmd.ExecuteNonQuery(); transaction.Commit();
         CleanupRecentImages();
+    }
+    public bool IsIgnoredLine(string text)
+    {
+        var signature = RecognitionText.IgnoreSignature(text);
+        if (signature.Length == 0) return false;
+        using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT 1 FROM ignored_texts WHERE signature=$signature"; cmd.Parameters.AddWithValue("$signature", signature);
+        return cmd.ExecuteScalar() is not null;
+    }
+    public void IgnoreLine(string text)
+    {
+        var signature = RecognitionText.IgnoreSignature(text);
+        if (signature.Length == 0) return;
+        using var cmd = db.CreateCommand(); cmd.CommandText = "INSERT OR REPLACE INTO ignored_texts(signature,sample,at) VALUES($signature,$sample,$at)";
+        cmd.Parameters.AddWithValue("$signature", signature); cmd.Parameters.AddWithValue("$sample", text.Trim()); cmd.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O")); cmd.ExecuteNonQuery();
+    }
+    public void ClearIgnoredLines()
+    {
+        using var cmd = db.CreateCommand(); cmd.CommandText = "DELETE FROM ignored_texts"; cmd.ExecuteNonQuery();
+    }
+    public int IgnoredLineCount()
+    {
+        using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT COUNT(*) FROM ignored_texts"; return Convert.ToInt32(cmd.ExecuteScalar());
     }
     public IReadOnlyList<RecentRecognition> RecentRecognitions(string search = "")
     {

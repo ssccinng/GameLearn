@@ -42,7 +42,7 @@
             </Border>
             <Border Grid.Row="1" Style="{StaticResource Card}" Padding="18">
               <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Grid Margin="0,0,15,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="识别出的原句" Style="{StaticResource Muted}" Margin="0,0,0,8"/><ListBox Grid.Row="1" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Text}" FontSize="14"/></DataTemplate></ListBox.ItemTemplate></ListBox></Grid>
+                <Grid Margin="0,0,15,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="识别出的原句" Style="{StaticResource Muted}" Margin="0,0,0,8"/><ListBox Grid.Row="1" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLine}"><ListBox.ItemTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Text}" FontSize="14" TextWrapping="Wrap"/><Button Grid.Column="1" Content="忽略" Tag="{Binding}" Click="IgnoreLine_Click" Padding="6,3" FontSize="11" ToolTip="以后不再显示同类 UI 文字"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox></Grid>
                 <Grid Grid.Column="1"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                   <TextBlock Text="点词查看释义 · 自动保存场景" Style="{StaticResource Muted}" Margin="0,0,0,8"/>
                   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding LineWords}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Content="{Binding}" Click="Word_Click" Margin="0,0,6,6" Padding="11,6"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
@@ -129,7 +129,7 @@
               <TextBlock Text="数据与场景" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,14"/>
               <TextBlock Text="单词、截图和学习历史保存在当前电脑。密钥使用 Windows 用户加密保护。" Style="{StaticResource Muted}" Margin="0,0,0,16"/>
               <WrapPanel><Button Content="打开数据目录" Click="OpenData_Click" Margin="0,0,8,8"/><Button Content="清理未引用截图" Click="Cleanup_Click" Margin="0,0,0,8"/></WrapPanel>
-              <Button Content="清空学习记录…" Click="ClearRecords_Click" Foreground="#F0B4AD" HorizontalAlignment="Left" Margin="0,4,0,16"/>
+              <WrapPanel><Button Content="清空学习记录…" Click="ClearRecords_Click" Foreground="#F0B4AD" HorizontalAlignment="Left" Margin="0,4,8,8"/><Button Content="清除忽略文字" Click="ClearIgnored_Click" Margin="0,4,0,8"/></WrapPanel>
               <TextBlock Text="游戏中的浮层优先支持窗口化和无边框模式；独占全屏可使用 OBS 投影。关闭窗口会退出，最小化可继续后台运行。" Style="{StaticResource Muted}"/>
             </StackPanel></Border>
             <Button Content="保存全部设置" Style="{StaticResource Primary}" Click="SaveSettings_Click" HorizontalAlignment="Left" Padding="24,12" Margin="0,20,0,0"/>

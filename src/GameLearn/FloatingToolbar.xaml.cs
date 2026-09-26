@@ -92,6 +92,10 @@ public partial class FloatingToolbar : Window
         if (vm.SelectedWord is not null) showDefinition?.Invoke();
         e.Handled = true;
     }
+    private void IgnoreLine_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: RecognizedLine line }) { vm.IgnoreRecognitionLine(line); e.Handled = true; }
+    }
     private void RestorePosition()
     {
         var work = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;

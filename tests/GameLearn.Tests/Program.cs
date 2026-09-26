@@ -19,6 +19,16 @@ void Assert(bool condition, string message) { if (!condition) throw new Exceptio
 CapturedFrame Frame(string sentence = "a", DateTimeOffset? at = null, string game = "Test game") => new(Guid.NewGuid(), at ?? DateTimeOffset.UtcNow, game, "fixture", new byte[] { 1, 2 }, new byte[] { 3 }, 800, 600, new(100, 200, 300, 200), sentence);
 RecognitionResult Result(CapturedFrame frame, string sentence = "The wrecked ship.") => new(frame, new[] { new RecognizedLine(sentence, 0.99, new(100, 200, 150, 20)) }, "fake", TimeSpan.FromMilliseconds(1));
 
+await Test("Ignored UI text: persistent signatures normalize changing numbers and clear", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "GameLearn-ignored-" + Guid.NewGuid());
+    using var store = new LearningStore(dir);
+    store.IgnoreLine("HP 100/100");
+    Assert(store.IsIgnoredLine("HP 98/100") && store.IgnoredLineCount() == 1, "dynamic UI signature not ignored");
+    Assert(!store.IsIgnoredLine("H P 98/100"), "different text was ignored by accident");
+    store.ClearIgnoredLines(); Assert(!store.IsIgnoredLine("HP 98/100") && store.IgnoredLineCount() == 0, "ignore clear failed");
+    return Task.CompletedTask;
+});
 await Test("Wordbook metadata: categories, separate counters, dates, search and persistence", () =>
 {
     var dir = Path.Combine(Path.GetTempPath(), "GameLearn-wordbook-" + Guid.NewGuid());

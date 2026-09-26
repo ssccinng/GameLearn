@@ -282,6 +282,8 @@ public partial class MainWindow : Window
     }
     private void ClearCrop_Click(object sender, RoutedEventArgs e) => Vm.SetCrop(null);
     private void Word_Click(object sender, RoutedEventArgs e) { if (sender is Button { Content: string word }) Vm.Learn(word); }
+    private void IgnoreLine_Click(object sender, RoutedEventArgs e) { if (sender is Button { Tag: RecognizedLine line }) Vm.IgnoreRecognitionLine(line); }
+    private void ClearIgnored_Click(object sender, RoutedEventArgs e) { Vm.ClearIgnoredLines(); }
     private void Correct_Click(object sender, RoutedEventArgs e) => Vm.Learn(Correction.Text.Trim());
     private void SaveSettings_Click(object sender, RoutedEventArgs e) => SaveSettings();
     private bool SaveAiSettings()

@@ -165,6 +165,15 @@ public record RecentRecognition(long Id, string Game, string Source, DateTimeOff
     }
 }
 public record RecentWord(string Word, RecognizedLine Line, RecentRecognition Recent);
+public static class RecognitionText
+{
+    public static string IgnoreSignature(string text)
+    {
+        var normalized = Regex.Replace(text.ToLowerInvariant(), @"\d+(?:[\s/:.,-]+\d+)*", "#");
+        normalized = Regex.Replace(normalized, @"[^\p{L}\p{Nd}#]+", " ");
+        return Regex.Replace(normalized, @"\s+", " ").Trim();
+    }
+}
 public record RecognitionRequest(CapturedFrame Frame, TriggerKind Trigger, long Generation, IOcrProvider Provider, bool TestOnly = false);
 
 public interface IOcrProvider

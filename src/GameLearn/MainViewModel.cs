@@ -223,6 +223,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Scheduler.IsCurrent(request) || disposed) return;
             if (request.TestOnly) { Status = $"官方 API 测试成功 · {result.Lines.Count} 行文字 · {result.Elapsed.TotalSeconds:0.0} 秒"; return; }
+            result = FilterIgnored(result);
             var recovered = automaticFailures > 0;
             automaticFailures = 0; AutomaticRetryAt = null; deferredAutomaticStatus = null;
             Store.SaveRecentRecognition(result);
@@ -438,6 +439,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         Result = result; Frame = result.Frame; Preview = CapturedFrame.Image(result.Frame.FullPng);
         Lines.Clear(); foreach (var line in result.Lines) Lines.Add(line); SelectedLine = Lines.FirstOrDefault(); FrameChanged?.Invoke();
+    }
+    private RecognitionResult FilterIgnored(RecognitionResult result) => result with { Lines = result.Lines.Where(line => !Store.IsIgnoredLine(line.Text)).ToArray() };
+    public void IgnoreRecognitionLine(RecognizedLine line)
+    {
+        Store.IgnoreLine(line.Text);
+        if (Result is not null) Present(FilterIgnored(Result));
+        Status = $"已忽略 UI 文字：{line.Text} · 可在设置中清除全部忽略标记";
+    }
+    public void ClearIgnoredLines()
+    {
+        Store.ClearIgnoredLines();
+        if (Result is not null) Present(Result);
+        Status = "已清除忽略文字标记。";
     }
     public void Learn(string observed)
     {
