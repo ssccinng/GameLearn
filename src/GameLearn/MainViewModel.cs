@@ -133,12 +133,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             History.Clear();
             if (value is not null)
             {
-                DetailWord = value.Word; DetailPhonetic = value.Phonetic; DetailTranslation = value.Translation;
+                DetailWord = value.Word; DetailLemma = ""; DetailPhonetic = value.Phonetic; DetailTranslation = value.Translation;
                 Notes = value.Notes; Mastered = value.Mastered;
                 foreach (var encounter in Store.History(value.Id)) History.Add(encounter);
                 SelectedEncounter = History.FirstOrDefault();
             }
-            else { DetailWord = "选择一个单词"; DetailTranslation = "查过的词，会带着游戏场景留在这里。"; DetailPhonetic = ""; SelectedEncounter = null; }
+            else { DetailWord = "选择一个单词"; DetailLemma = ""; DetailTranslation = "查过的词，会带着游戏场景留在这里。"; DetailPhonetic = ""; SelectedEncounter = null; }
         }
     }
     private Encounter? selectedEncounter;
@@ -149,14 +149,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref selectedEncounter, value)) return;
             DetailSentence = value?.Sentence ?? ""; AiExplanation = "";
+            if (value is not null)
+            {
+                var entry = Dictionary.Lookup(value.Observed);
+                DetailWord = value.Observed; DetailLemma = entry.Word == value.Observed ? "" : $"词典词条：{entry.Word}";
+                DetailPhonetic = entry.ObservedPhonetic ?? entry.Phonetic;
+                DetailTranslation = entry.ObservedTranslation ?? entry.Translation;
+            }
             try { HistoryImage = value is not null && File.Exists(value.ImagePath) ? CapturedFrame.Image(File.ReadAllBytes(value.ImagePath)) : null; }
             catch (IOException) { HistoryImage = null; }
         }
     }
     private BitmapImage? historyImage;
     public BitmapImage? HistoryImage { get => historyImage; private set => Set(ref historyImage, value); }
-    private string detailWord = "选择一个单词", detailPhonetic = "", detailTranslation = "查过的词，会带着游戏场景留在这里。", detailSentence = "", notes = "", aiExplanation = "";
+    private string detailWord = "选择一个单词", detailLemma = "", detailPhonetic = "", detailTranslation = "查过的词，会带着游戏场景留在这里。", detailSentence = "", notes = "", aiExplanation = "";
     public string DetailWord { get => detailWord; private set => Set(ref detailWord, value); }
+    public string DetailLemma { get => detailLemma; private set => Set(ref detailLemma, value); }
     public string DetailPhonetic { get => detailPhonetic; private set => Set(ref detailPhonetic, value); }
     public string DetailTranslation { get => detailTranslation; private set => Set(ref detailTranslation, value); }
     public string DetailSentence { get => detailSentence; private set => Set(ref detailSentence, value); }

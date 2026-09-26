@@ -208,6 +208,8 @@ await Test("Storage/tracker: morphology, persistence, dedup, prior scene, master
         fixture.Open(); using var cmd = fixture.CreateCommand(); cmd.CommandText = "CREATE TABLE entries(word TEXT PRIMARY KEY,phonetic TEXT,translation TEXT,lemma TEXT); CREATE TABLE forms(form TEXT PRIMARY KEY,lemma TEXT); INSERT INTO entries VALUES('wreck','rek','毁坏',''),('wrecked','','毁坏的','wreck');"; cmd.ExecuteNonQuery();
     }
     using var dictionary = new OfflineDictionary(dictPath);
+    var bearing = dictionary.Lookup("wrecked");
+    Assert(bearing.Word == "wreck" && bearing.Observed == "wrecked" && bearing.ObservedTranslation == "毁坏的", "word form definition was not preserved");
     Assert(dictionary.Lookup("Wrecked").Word == "wreck", "lemma failed");
     var at = DateTimeOffset.UtcNow;
     using (var store = new LearningStore(dir))
@@ -469,6 +471,14 @@ await Test("AI failures: homepage HTML, empty content and auth errors are action
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException) { raised = e.Message.Contains(expected[index]) && !e.Message.Contains("private server detail"); }
         Assert(raised, "failure missing safe actionable message");
     }
+});
+await Test("Dictionary: actual inflection keeps its own definition while normalizing lemma", () =>
+{
+    using var dictionary = new OfflineDictionary();
+    var entry = dictionary.Lookup("bearing");
+    Assert(entry.Word == "bear" && entry.Observed == "bearing" && entry.ObservedPhonetic?.Contains("b") == true
+        && entry.ObservedTranslation?.Contains("轴承") == true && entry.Translation.Contains("熊"), "inflection definition was collapsed into lemma");
+    return Task.CompletedTask;
 });
 await Test("Learning priority: difficult and unknown sentences rise above common sentences", () =>
 {

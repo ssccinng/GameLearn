@@ -71,7 +71,7 @@ internal static class FloatingRegression
             var wordButton = Descendants<Button>((DependencyObject)bar.Content).FirstOrDefault(b => b.DataContext is string word && word == "wrecked");
             Check("Words from a non-selected dialogue line are directly clickable", wordButton is not null && ReferenceEquals(vm.SelectedLine, speaker));
             wordButton!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check("Direct word click selects its own original line and opens definition", definitions == 1 && vm.DetailWord == "wreck" && ReferenceEquals(vm.SelectedLine, line));
+            Check("Direct word click selects its own original line and opens definition", definitions == 1 && vm.DetailWord == "wrecked" && vm.DetailLemma == "词典词条：wreck" && ReferenceEquals(vm.SelectedLine, line));
             Check("Direct word click records the matching displayed screenshot", vm.SelectedEncounter!.ImagePath.EndsWith(frame.Id + ".png", StringComparison.Ordinal));
             card = new LookupWindow(vm, compact: true);
             card.ShowPage(false);
@@ -80,7 +80,7 @@ internal static class FloatingRegression
             Check("Floating lookup uses a compact two-page layout", card.IsCompact && card.Width == 460 && lookupTabs.Items.Count == 2);
             card.ShowPage(true);
             Render((FrameworkElement)card.Content, card.Width - 16, card.Height - 40, Path.Combine(output, "floating-definition.png"));
-            Check("Recall/word page is available without opening the full dashboard", lookupTabs.SelectedIndex == 1 && vm.DetailWord == "wreck");
+            Check("Recall/word page is available without opening the full dashboard", lookupTabs.SelectedIndex == 1 && vm.DetailWord == "wrecked");
             Check("Hidden toolbar rendering leaves interaction protection released", !vm.IsAutomaticRefreshPaused);
             vm.Store.SaveRecentRecognition(initial);
             book = new WordbookWindow(vm, true, () => expands++);

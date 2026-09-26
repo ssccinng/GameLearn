@@ -25,15 +25,18 @@ public sealed class OfflineDictionary : IDisposable
             using var reader = cmd.ExecuteReader();
             return reader.Read() ? (reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)) : null;
         }
-        var found = Query(word);
-        if (found is { } f && !string.IsNullOrWhiteSpace(f.Lemma)) found = Query(f.Lemma) ?? found;
-        if (found is null && connection is not null)
+        var direct = Query(word);
+        var lemma = direct is { } directEntry && !string.IsNullOrWhiteSpace(directEntry.Lemma) ? directEntry.Lemma : null;
+        if (lemma is null && connection is not null)
         {
             using var cmd = connection.CreateCommand(); cmd.CommandText = "SELECT lemma FROM forms WHERE form=$w"; cmd.Parameters.AddWithValue("$w", word);
-            if (cmd.ExecuteScalar() is string lemma) found = Query(lemma);
+            if (cmd.ExecuteScalar() is string formLemma) lemma = formLemma;
         }
-        var result = found is { } entry
-            ? new DictionaryEntry(entry.Word, entry.Phonetic, string.IsNullOrWhiteSpace(entry.Translation) ? "词典暂无中文释义，可使用 AI 语境解释。" : entry.Translation, observed)
+        var canonical = (lemma is null ? null : Query(lemma)) ?? direct;
+        var result = canonical is { } entry
+            ? new DictionaryEntry(entry.Word, entry.Phonetic, string.IsNullOrWhiteSpace(entry.Translation) ? "词典暂无中文释义，可使用 AI 语境解释。" : entry.Translation, observed,
+                direct is { } form && !form.Word.Equals(entry.Word, StringComparison.OrdinalIgnoreCase) ? form.Phonetic : null,
+                direct is { } formWithDefinition && !formWithDefinition.Word.Equals(entry.Word, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(formWithDefinition.Translation) ? formWithDefinition.Translation : null)
             : new DictionaryEntry(word, "", Available ? "离线词典未收录，可能是专有名词。可修正拼写或使用 AI 解释。" : "离线词典文件缺失，请重新解压完整的 GameLearn 程序包。", observed);
         cache[word] = result; return result;
     }

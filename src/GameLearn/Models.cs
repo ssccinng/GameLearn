@@ -109,7 +109,7 @@ public static class SceneContext
     }
     private static bool Neighbors(RecognizedLine a, RecognizedLine b) => b.Bounds.Y - a.Bounds.Y - a.Bounds.Height <= Math.Max(a.Bounds.Height, b.Bounds.Height) * 0.7;
 }
-public record DictionaryEntry(string Word, string Phonetic, string Translation, string Observed);
+public record DictionaryEntry(string Word, string Phonetic, string Translation, string Observed, string? ObservedPhonetic = null, string? ObservedTranslation = null);
 public record SavedWord(long Id, string Word, string Phonetic, string Translation, bool Mastered, string Notes, int Encounters, string LastGame);
 public record Encounter(long Id, string Word, string Observed, string Sentence, string Game, DateTimeOffset At, string ImagePath, PixelRect Bounds);
 public record Recall(SavedWord Word, Encounter Previous, Encounter Current);
