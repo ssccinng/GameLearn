@@ -7,6 +7,7 @@ namespace GameLearn;
 public sealed class AppSettings
 {
     public OcrEngineKind Engine { get; set; }
+    public bool PreferTextRegions { get; set; } = true;
     public double LocalIntervalSeconds { get; set; } = 1;
     public double CloudIntervalSeconds { get; set; } = 5;
     public int CloudTimeoutSeconds { get; set; } = 30;

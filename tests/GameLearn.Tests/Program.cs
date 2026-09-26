@@ -192,6 +192,32 @@ await Test("Scheduler: unchanged auto frame skips inference but updates observat
     await scheduler.EnqueueAsync(new(b, TriggerKind.Automatic, scheduler.Generation, fake));
     Assert(fake.Calls == 1 && ids.SequenceEqual(new[] { a.Id, b.Id }), "unchanged frame handling wrong");
 });
+await Test("Capture pixels: no duplicate full PNG and owned pixels outlive native capture", () =>
+{
+    CapturedFrame frame;
+    using (var bitmap = new SKBitmap(100, 80))
+    {
+        bitmap.Erase(SKColors.Coral);
+        frame = CaptureService.CreateFrame(bitmap, "test", "window", retainPixels: true);
+    }
+    Assert(ReferenceEquals(frame.FullPng, frame.OcrPng), "full capture encoded twice");
+    using var pixels = frame.Pixels!.Open();
+    Assert(pixels.GetPixel(45, 20) == SKColors.Coral, "raw capture buffer lifetime or format incorrect");
+    using var encoded = SKBitmap.Decode(frame.FullPng);
+    Assert(encoded.GetPixel(45, 20) == SKColors.Coral, "fast PNG changed image pixels");
+    using var reopened = frame.Pixels.Open();
+    Assert(reopened.GetPixel(45, 20) == SKColors.Coral, "reopening shared immutable pixels failed");
+    return Task.CompletedTask;
+});
+await Test("Text region: cropped coordinates, margin and scattered-text fallback", () =>
+{
+    var frame = Frame();
+    var region = TextRegion.Around(new[] { new RecognizedLine("The wrecked ship", .99, new(190, 270, 60, 20)) }, frame);
+    Assert(region is not null && region.Value.Left == 58 && region.Value.Top == 38, "crop offset or safety margin lost");
+    Assert(TextRegion.Around(new[] { new RecognizedLine("All screen", .99, frame.Region) }, frame) is null, "large region should use full scan");
+    Assert(TextRegion.Around(new[] { new RecognizedLine("Uncertain", .5, new(190, 270, 60, 20)) }, frame) is null, "low-confidence text silently excluded");
+    return Task.CompletedTask;
+});
 await Test("Capture: normalized crop preserves full snapshot and image dimensions", () =>
 {
     using var bitmap = new SKBitmap(800, 600); bitmap.Erase(SKColors.White);

@@ -31,6 +31,8 @@ public record CropRegion(double X, double Y, double Width, double Height);
 public record CapturedFrame(Guid Id, DateTimeOffset Timestamp, string Game, string Source,
     byte[] FullPng, byte[] OcrPng, int Width, int Height, PixelRect Region, string Fingerprint)
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CapturedPixels? Pixels { get; init; }
     public PixelRect? DesktopBounds { get; init; }
     public bool CapturedClientOnly { get; init; }
     public string? SourceKey { get; init; }
@@ -92,7 +94,10 @@ public static class LearningPriority
         return new(line, words, Math.Round(score, 1), level, label, color);
     }
 }
-public record RecognitionResult(CapturedFrame Frame, IReadOnlyList<RecognizedLine> Lines, string Engine, TimeSpan Elapsed);
+public record RecognitionResult(CapturedFrame Frame, IReadOnlyList<RecognizedLine> Lines, string Engine, TimeSpan Elapsed)
+{
+    public string ScanMode { get; init; } = "全区域";
+}
 public static class SceneContext
 {
     public static RecognizedLine ForLine(RecognitionResult? result, RecognizedLine line)

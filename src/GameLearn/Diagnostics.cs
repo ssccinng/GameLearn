@@ -14,6 +14,8 @@ public static class Diagnostics
         if (args.Contains("--presentation-regression")) { await PresentationRegression.RunAsync(output); return; }
         if (args.Contains("--floating-regression")) { await FloatingRegression.RunAsync(output); return; }
         if (args.Contains("--projection-regression")) { await ProjectionRegression.RunAsync(output); return; }
+        if (args.Contains("--performance-regression")) { await PerformanceRegression.RunAsync(output, Argument(args, "--samples")); return; }
+        if (args.Contains("--adaptive-regression")) { await AdaptiveOcrRegression.RunAsync(output); return; }
         if (args.Contains("--ai-settings-regression")) { await AiSettingsRegression.RunAsync(output); return; }
         if (args.Contains("--test-saved-ai"))
         {

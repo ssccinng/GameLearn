@@ -240,6 +240,7 @@ public partial class MainWindow : Window
     private void LoadSettings()
     {
         var s = Vm.Settings; EngineBox.SelectedIndex = (int)s.Engine; OcrTokenBox.Password = AppSettings.Unprotect(s.OcrSecret); AiTokenBox.Password = AppSettings.Unprotect(s.AiSecret);
+        TextRegionBox.IsChecked = s.PreferTextRegions;
         LocalIntervalBox.Text = s.LocalIntervalSeconds.ToString(CultureInfo.InvariantCulture); CloudIntervalBox.Text = s.CloudIntervalSeconds.ToString(CultureInfo.InvariantCulture); TimeoutBox.Text = s.CloudTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
         CaptureKeyBox.Text = s.CaptureHotkey; AutoKeyBox.Text = s.AutoHotkey; RecallKeyBox.Text = s.RecallHotkey; AiUrlBox.Text = s.AiBaseUrl; AiModelBox.Text = s.AiModel;
         ObsLocalConfigBox.IsChecked = s.ObsUseLocalConfiguration; ObsPortBox.Text = s.ObsPort.ToString(CultureInfo.InvariantCulture); ObsPasswordBox.Password = AppSettings.Unprotect(s.ObsSecret);
@@ -255,6 +256,7 @@ public partial class MainWindow : Window
             AiExplanationService.ValidateConfiguration(AiUrlBox.Text, AiModelBox.Text, allowDisabled: true);
             ConfigureHotkeys(CaptureKeyBox.Text.Trim(), AutoKeyBox.Text.Trim(), RecallKeyBox.Text.Trim());
             var s = Vm.Settings; s.Engine = (OcrEngineKind)EngineBox.SelectedIndex; s.LocalIntervalSeconds = local; s.CloudIntervalSeconds = cloud; s.CloudTimeoutSeconds = timeout;
+            s.PreferTextRegions = TextRegionBox.IsChecked == true;
             s.CaptureHotkey = CaptureKeyBox.Text.Trim(); s.AutoHotkey = AutoKeyBox.Text.Trim(); s.RecallHotkey = RecallKeyBox.Text.Trim();
             s.OcrSecret = AppSettings.Protect(OcrTokenBox.Password.Trim()); s.AiSecret = AppSettings.Protect(AiTokenBox.Password.Trim()); s.AiBaseUrl = AiUrlBox.Text.Trim().TrimEnd('/'); s.AiModel = AiModelBox.Text.Trim();
             s.ObsUseLocalConfiguration = ObsLocalConfigBox.IsChecked == true; s.ObsPort = obsPort; s.ObsSecret = AppSettings.Protect(ObsPasswordBox.Password);

@@ -62,7 +62,7 @@ public sealed class CaptureService : IDisposable
             .ThenByDescending(w => w.ProcessName == "obs64").ThenBy(w => w.Title).ToArray();
     }
 
-    public async Task<CapturedFrame> CaptureAsync(WindowSource source, string game, CropRegion? crop, CancellationToken token)
+    public async Task<CapturedFrame> CaptureAsync(WindowSource source, string game, CropRegion? crop, CancellationToken token, bool retainPixels = false)
     {
         await gate.WaitAsync(token);
         try
@@ -96,7 +96,7 @@ public sealed class CaptureService : IDisposable
                 if (bounds is null || bounds != CaptureGeometry.Read(source.Handle, clientOnly)
                     || Math.Abs(bounds.Width - bitmap.Width) > 2 || Math.Abs(bounds.Height - bitmap.Height) > 2)
                     throw new InvalidOperationException("窗口正在移动或缩放，请待画面稳定后重新识别。");
-                var frame = await Task.Run(() => CreateFrame(bitmap, game, source.Title, crop), token);
+                var frame = await Task.Run(() => CreateFrame(bitmap, game, source.Title, crop, retainPixels), token);
                 return frame with { DesktopBounds = bounds, CapturedClientOnly = clientOnly, SourceKey = source.Key };
             }
         }
@@ -110,22 +110,31 @@ public sealed class CaptureService : IDisposable
             throw new InvalidOperationException("画面来源已关闭或最小化，请恢复窗口并重新选择。");
     }
 
-    public static CapturedFrame CreateFrame(SKBitmap bitmap, string game, string source, CropRegion? crop = null)
+    public static CapturedFrame CreateFrame(SKBitmap bitmap, string game, string source, CropRegion? crop = null, bool retainPixels = false)
     {
+        var capturedAt = DateTimeOffset.Now;
         var rect = crop is null ? new SKRectI(0, 0, bitmap.Width, bitmap.Height) : new SKRectI(
             (int)(crop.X * bitmap.Width), (int)(crop.Y * bitmap.Height),
             (int)((crop.X + crop.Width) * bitmap.Width), (int)((crop.Y + crop.Height) * bitmap.Height));
         rect = SKRectI.Intersect(rect, new SKRectI(0, 0, bitmap.Width, bitmap.Height));
         if (rect.Width < 8 || rect.Height < 8) throw new InvalidOperationException("识别区域太小，请重新框选。");
-        using var region = new SKBitmap(rect.Width, rect.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var canvas = new SKCanvas(region)) canvas.DrawBitmap(bitmap, rect, new SKRect(0, 0, rect.Width, rect.Height));
-        using var full = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-        using var partial = region.Encode(SKEncodedImageFormat.Png, 100);
-        var bytes = partial.ToArray();
-        return new(Guid.NewGuid(), DateTimeOffset.Now, game, source, full.ToArray(), bytes, bitmap.Width, bitmap.Height,
-            new(rect.Left, rect.Top, rect.Width, rect.Height), Convert.ToHexString(SHA256.HashData(bytes)));
+        var isFull = rect.Left == 0 && rect.Top == 0 && rect.Width == bitmap.Width && rect.Height == bitmap.Height;
+        using var region = isFull ? null : new SKBitmap(rect.Width, rect.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        if (region is not null) using (var canvas = new SKCanvas(region)) canvas.DrawBitmap(bitmap, rect, new SKRect(0, 0, rect.Width, rect.Height));
+        using var full = retainPixels ? FastPng(bitmap) : bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        var fullBytes = full.ToArray();
+        using var partial = region is null ? null : retainPixels ? FastPng(region) : region.Encode(SKEncodedImageFormat.Png, 100);
+        var bytes = partial?.ToArray() ?? fullBytes;
+        return new(Guid.NewGuid(), capturedAt, game, source, fullBytes, bytes, bitmap.Width, bitmap.Height,
+            new(rect.Left, rect.Top, rect.Width, rect.Height), Convert.ToHexString(SHA256.HashData(bytes)))
+            { Pixels = retainPixels ? CapturedPixels.Copy(region ?? bitmap) : null };
     }
 
+    private static SKData FastPng(SKBitmap bitmap)
+    {
+        using var pixels = bitmap.PeekPixels();
+        return pixels.Encode(new SKPngEncoderOptions(SKPngEncoderFilterFlags.Sub, 1)) ?? throw new InvalidDataException("截图编码失败。");
+    }
     private async Task<SKBitmap> CaptureWgcAsync(nint handle, CancellationToken token)
     {
         if (!GraphicsCaptureSession.IsSupported()) throw new InvalidOperationException("系统不支持窗口捕获。");
@@ -146,7 +155,7 @@ public sealed class CaptureService : IDisposable
         return await activeSession.SnapshotAsync(token);
     }
 
-    public static SKBitmap CapturePrintWindow(nint handle)
+    public static unsafe SKBitmap CapturePrintWindow(nint handle)
     {
         var previous = Native.SetThreadDpiAwarenessContext(-4);
         try
@@ -158,8 +167,20 @@ public sealed class CaptureService : IDisposable
             bool success;
             try { success = Native.PrintWindow(handle, dc, 3); } finally { graphics.ReleaseHdc(dc); }
             if (!success) throw new InvalidOperationException("OBS 窗口捕获失败，请保持投影窗口打开。");
-            using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
-            return SKBitmap.Decode(stream.ToArray());
+            var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                var image = new SKBitmap(bitmap.Width, bitmap.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+                try
+                {
+                    for (var y = 0; y < bitmap.Height; y++)
+                        Buffer.MemoryCopy((byte*)data.Scan0 + y * data.Stride, (byte*)image.GetPixels() + y * image.RowBytes, image.RowBytes, bitmap.Width * 4L);
+                    return image;
+                }
+                catch { image.Dispose(); throw; }
+            }
+            finally { bitmap.UnlockBits(data); }
         }
         finally { Native.SetThreadDpiAwarenessContext(previous); }
     }

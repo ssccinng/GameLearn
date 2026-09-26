@@ -83,6 +83,8 @@
               <TextBlock Text="文字识别" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,14"/>
               <TextBlock Text="识别引擎" Style="{StaticResource Muted}" Margin="0,0,0,6"/>
               <ComboBox x:Name="EngineBox"><ComboBoxItem Content="本地 PP-OCRv5 · 完全离线"/><ComboBoxItem Content="官方 PP-OCRv6 API · 在线"/></ComboBox>
+              <CheckBox x:Name="TextRegionBox" Content="本地自动识别优先处理文字区域" Margin="0,12,0,0"/>
+              <TextBlock Text="自动识别复用未变化的文字区域，约每 3 秒重新完整扫描；即时识别始终扫描所选区域。可关闭以优先发现新位置的文字。" Style="{StaticResource Muted}" Margin="0,6,0,0"/>
               <TextBlock Text="AI Studio Access Token" Style="{StaticResource Muted}" Margin="0,16,0,6"/><PasswordBox x:Name="OcrTokenBox"/>
               <TextBlock Text="在线 OCR 会上传所选游戏窗口或框选区域。它和下方的 AI 语境解释是独立服务。" Style="{StaticResource Muted}" Margin="0,10,0,16"/>
               <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>

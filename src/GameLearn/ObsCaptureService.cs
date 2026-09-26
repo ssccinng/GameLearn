@@ -125,7 +125,7 @@ public sealed class ObsCaptureService(Func<ObsConnectionOptions> configuration) 
         return list;
     }
 
-    public Task<CapturedFrame> CaptureAsync(WindowSource source, string game, CropRegion? crop, CancellationToken token)
+    public Task<CapturedFrame> CaptureAsync(WindowSource source, string game, CropRegion? crop, CancellationToken token, bool retainPixels = false)
         => RunAsync(async ct =>
         {
             var name = source.ObsName;
@@ -138,7 +138,7 @@ public sealed class ObsCaptureService(Func<ObsConnectionOptions> configuration) 
             {
                 using var bitmap = SKBitmap.Decode(bytes) ?? throw new InvalidDataException("OBS 返回的图片无法解码。");
                 if (CaptureService.IsBlank(bitmap)) throw new InvalidOperationException("OBS 捕获源当前为黑画面，请确认来源有信号且已激活。");
-                return CaptureService.CreateFrame(bitmap, game, $"OBS · {name}", crop);
+                return CaptureService.CreateFrame(bitmap, game, $"OBS · {name}", crop, retainPixels);
             }, ct);
         }, token);
     public static byte[] DecodeScreenshot(string data)

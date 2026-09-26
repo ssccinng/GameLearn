@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using RapidOcrNet;
 using SkiaSharp;
+using System.Security.Cryptography;
 
 namespace GameLearn;
 
@@ -11,8 +12,16 @@ public sealed class LocalOcrProvider : IOcrProvider, IDisposable
 {
     private RapidOcr? engine;
     private readonly SemaphoreSlim gate = new(1);
+    private (string Source, string Game, int Width, int Height, PixelRect Region)? previousKey;
+    private SKRectI? textRegion;
+    private string? textHash;
+    private IReadOnlyList<RecognizedLine> previousLines = Array.Empty<RecognizedLine>();
+    private long lastFullScan;
+    public bool PreferTextRegions { get; set; } = true;
     public string Name => "本地 PP-OCRv5 · 离线";
-    public async Task<RecognitionResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken)
+    public Task<RecognitionResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken) => RecognizeCore(frame, false, cancellationToken);
+    public Task<RecognitionResult> RecognizeAutomaticAsync(CapturedFrame frame, CancellationToken cancellationToken) => RecognizeCore(frame, PreferTextRegions, cancellationToken);
+    private async Task<RecognitionResult> RecognizeCore(CapturedFrame frame, bool adaptive, CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
         try
@@ -34,20 +43,52 @@ public sealed class LocalOcrProvider : IOcrProvider, IDisposable
                     }
                     catch { candidate.Dispose(); throw; }
                 }
-                using var bitmap = SKBitmap.Decode(frame.OcrPng);
-                var result = engine.Detect(bitmap, RapidOcrOptions.Default with { DoAngle = false, ImgResize = 1536, TextScore = 0.65f });
-                cancellationToken.ThrowIfCancellationRequested();
-                var lines = result.TextBlocks.Select(b =>
+                using var bitmap = frame.Pixels?.Open() ?? SKBitmap.Decode(frame.OcrPng);
+                var key = (frame.SourceKey ?? frame.Source, frame.Game, frame.Width, frame.Height, frame.Region);
+                var useRegion = adaptive && previousKey == key && textRegion is not null && Stopwatch.GetElapsedTime(lastFullScan) < TimeSpan.FromSeconds(3);
+                using var cropped = useRegion ? Crop(bitmap, textRegion!.Value) : null;
+                var hash = cropped is null ? null : Convert.ToHexString(SHA256.HashData(cropped.Bytes));
+                if (cropped is not null && hash == textHash)
                 {
-                    var xs = b.BoxPoints.Select(p => (double)p.X).ToArray();
-                    var ys = b.BoxPoints.Select(p => (double)p.Y).ToArray();
-                    return new RecognizedLine(b.Text, b.CharScores?.Average() ?? 0,
-                        new(xs.Min() + frame.Region.X, ys.Min() + frame.Region.Y, xs.Max() - xs.Min(), ys.Max() - ys.Min()));
-                }).ToArray();
-                return new RecognitionResult(frame, lines, Name, watch.Elapsed);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return new RecognitionResult(frame, previousLines, Name, watch.Elapsed) { ScanMode = "文字未变化" };
+                }
+                var offset = useRegion ? textRegion!.Value : new SKRectI(0, 0, bitmap.Width, bitmap.Height);
+                var lines = Detect(cropped ?? bitmap, frame, offset.Left, offset.Top);
+                if (useRegion && (lines.Count < previousLines.Count || previousLines.Any(p => p.Words.Count() == 1 && !lines.Any(l => l.Text == p.Text))
+                    || lines.Count == 0 || lines.Any(l => l.Bounds.X <= frame.Region.X + offset.Left + 4
+                    || l.Bounds.Y <= frame.Region.Y + offset.Top + 4 || l.Bounds.X + l.Bounds.Width >= frame.Region.X + offset.Right - 4
+                    || l.Bounds.Y + l.Bounds.Height >= frame.Region.Y + offset.Bottom - 4)))
+                { useRegion = false; lines = Detect(bitmap, frame, 0, 0); }
+                cancellationToken.ThrowIfCancellationRequested();
+                previousKey = key; previousLines = lines;
+                if (!useRegion)
+                {
+                    lastFullScan = Stopwatch.GetTimestamp(); textRegion = TextRegion.Around(lines, frame);
+                    using var region = textRegion is { } rect ? Crop(bitmap, rect) : null;
+                    textHash = region is null ? null : Convert.ToHexString(SHA256.HashData(region.Bytes));
+                }
+                else textHash = hash;
+                return new RecognitionResult(frame, lines, Name, watch.Elapsed) { ScanMode = useRegion ? "文字区域" : "全区域" };
             }, cancellationToken);
         }
         finally { gate.Release(); }
+    }
+    private IReadOnlyList<RecognizedLine> Detect(SKBitmap bitmap, CapturedFrame frame, int x, int y)
+    {
+        var result = engine!.Detect(bitmap, RapidOcrOptions.Default with { DoAngle = false, ImgResize = 1536, TextScore = 0.65f });
+        return result.TextBlocks.Select(b =>
+        {
+            var xs = b.BoxPoints.Select(p => (double)p.X).ToArray(); var ys = b.BoxPoints.Select(p => (double)p.Y).ToArray();
+            return new RecognizedLine(b.Text, b.CharScores?.Average() ?? 0, new(xs.Min() + frame.Region.X + x,
+                ys.Min() + frame.Region.Y + y, xs.Max() - xs.Min(), ys.Max() - ys.Min()));
+        }).ToArray();
+    }
+    private static SKBitmap Crop(SKBitmap bitmap, SKRectI rect)
+    {
+        using var subset = new SKBitmap();
+        if (!bitmap.ExtractSubset(subset, rect)) throw new InvalidDataException("文字区域超出截图。");
+        return subset.Copy(); // Tight rows: animated pixels outside the region must not enter its fingerprint.
     }
     public void Dispose() { engine?.Dispose(); gate.Dispose(); }
 }

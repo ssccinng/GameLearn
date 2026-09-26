@@ -180,6 +180,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MainViewModel(HttpClient? httpClient = null)
     {
         http = httpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        local.PreferTextRegions = Settings.PreferTextRegions;
         if (!string.IsNullOrWhiteSpace(Settings.AiBaseUrl) && !string.IsNullOrWhiteSpace(Settings.AiModel))
             aiConfigurationStatus = $"已加载保存的 AI 配置 · {Settings.AiModel} · 点击测试验证连接。";
         var dispatcher = Dispatcher.CurrentDispatcher;
@@ -236,7 +237,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var unchanged = Result is not null && Result.Frame.Source == result.Frame.Source && Result.Frame.Region == result.Frame.Region
             && Result.Lines.SequenceEqual(result.Lines) && Result.Frame.FullPng.AsSpan().SequenceEqual(result.Frame.FullPng);
         if (trigger == TriggerKind.Manual || !unchanged) Present(result);
-        Status = $"{result.Engine} · {result.Lines.Count} 行英文 · {result.Elapsed.TotalMilliseconds:0} ms · {result.Frame.Timestamp:HH:mm:ss}";
+        Status = $"{result.Engine} · {result.ScanMode} · {result.Lines.Count} 行英文 · {result.Elapsed.TotalMilliseconds:0} ms · {result.Frame.Timestamp:HH:mm:ss}";
         RefreshWords();
     }
     internal void FlushAutomaticPresentation()
@@ -252,7 +253,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task<CapturedFrame> CaptureCurrentAsync(WindowSource source, string game, CropRegion? region, CancellationToken token)
     {
         captureOperations++;
-        try { return source.IsObs ? await obs.CaptureAsync(source, game, region, token) : await capture.CaptureAsync(source, game, region, token); }
+        try { return source.IsObs ? await obs.CaptureAsync(source, game, region, token, Settings.Engine == OcrEngineKind.Local)
+            : await capture.CaptureAsync(source, game, region, token, Settings.Engine == OcrEngineKind.Local); }
         finally { captureOperations--; }
     }
     public void RefreshSources()
@@ -293,6 +295,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
     public void ApplySettings()
     {
+        local.PreferTextRegions = Settings.PreferTextRegions;
         Invalidate(); obsReset = obs.ResetAsync(); Settings.Save(); ResetAiConfiguration(); Raise(nameof(EngineLabel)); Status = "设置已保存 · 识别引擎已更新";
     }
     public void SaveAiConfiguration(string address, string model, string secret)

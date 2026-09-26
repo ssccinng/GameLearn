@@ -69,10 +69,12 @@ public sealed class RecognitionScheduler : IDisposable
                         throw new OcrRateLimitException(RetryAt - DateTimeOffset.UtcNow);
                     RecognitionResult result;
                     if (request.Trigger == TriggerKind.Automatic && cached?.Frame.Fingerprint == request.Frame.Fingerprint && cachedEngine == request.Provider.Name)
-                        result = cached with { Frame = request.Frame, Elapsed = TimeSpan.Zero };
+                        result = cached with { Frame = request.Frame, Elapsed = TimeSpan.Zero, ScanMode = "画面未变化" };
                     else
                     {
-                        result = await request.Provider.RecognizeAsync(request.Frame, cancellation.Token);
+                        result = request.Provider is LocalOcrProvider local && request.Trigger == TriggerKind.Automatic && cached is not null
+                            ? await local.RecognizeAutomaticAsync(request.Frame, cancellation.Token)
+                            : await request.Provider.RecognizeAsync(request.Frame, cancellation.Token);
                         result = result with { Lines = SentenceAssembler.Merge(result.Lines) };
                     }
                     if (!cancellation.IsCancellationRequested && IsCurrent(request))
