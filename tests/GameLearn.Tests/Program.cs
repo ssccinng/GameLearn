@@ -19,6 +19,46 @@ void Assert(bool condition, string message) { if (!condition) throw new Exceptio
 CapturedFrame Frame(string sentence = "a", DateTimeOffset? at = null, string game = "Test game") => new(Guid.NewGuid(), at ?? DateTimeOffset.UtcNow, game, "fixture", new byte[] { 1, 2 }, new byte[] { 3 }, 800, 600, new(100, 200, 300, 200), sentence);
 RecognitionResult Result(CapturedFrame frame, string sentence = "The wrecked ship.") => new(frame, new[] { new RecognizedLine(sentence, 0.99, new(100, 200, 150, 20)) }, "fake", TimeSpan.FromMilliseconds(1));
 
+await Test("Wordbook metadata: categories, separate counters, dates, search and persistence", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "GameLearn-wordbook-" + Guid.NewGuid());
+    var start = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
+    using (var store = new LearningStore(dir))
+    {
+        var word = store.EnsureWord(new("wreck", "rek", "损坏", "wrecked"));
+        store.SaveEncounter(word, "wrecked", new("The wrecked ship.", .99, new(0, 0, 80, 20)), Frame(at: start));
+        store.RecordView(word.Id, true); store.RecordView(word.Id);
+        store.SetCategory(word.Id, "剧情"); store.UpdateWord(word.Id, false, "船的记忆");
+        store.SaveEncounter(word, "wreck", new("A terrible wreck.", .99, new(0, 0, 80, 20)), Frame(at: start.AddDays(3)));
+        var current = store.Words().Single();
+        Assert(current.LookupCount == 1 && current.ViewCount == 2 && current.Encounters == 2, "automatic encounters counted as views or joins duplicated counts");
+        Assert(current.FirstSeen == start && current.LastSeen == start.AddDays(3) && current.LastViewed is not null, "dates incorrect");
+        Assert(store.Words("船的记忆").Count == 1 && store.Words("剧情").Count == 1 && store.Words("wrecked").Count == 1, "expanded search missing content");
+    }
+    using (var store = new LearningStore(dir))
+    {
+        var word = store.Words().Single();
+        Assert(word.Category == "剧情" && word.ViewCount == 2, "metadata lost on restart");
+        var date = start.LocalDateTime.Date;
+        Assert(WordbookFilter.Apply(new[] { word }, "剧情", false, date, date, WordbookSort.MostViewed).Count == 1, "inclusive date/category/status filtering failed");
+        Assert(WordbookFilter.Apply(new[] { word }, null, null, date.AddDays(1), null, WordbookSort.LatestEncounter).Count == 0, "date should filter first encounter");
+        var other = word with { Id = 2, Word = "ancient", ViewCount = 8 };
+        Assert(WordbookFilter.Apply(new[] { word, other }, null, null, null, null, WordbookSort.MostViewed)[0].Id == 2, "frequency ordering incorrect");
+        store.DeleteWord(word.Id); Assert(store.Words().Count == 0, "delete failed");
+    }
+    return Task.CompletedTask;
+});
+await Test("Wordbook metadata: migration does not invent historical views", () =>
+{
+    var dir = Path.Combine(Path.GetTempPath(), "GameLearn-old-wordbook-" + Guid.NewGuid());
+    using (var store = new LearningStore(dir)) store.EnsureWord(new("ancient", "", "古老的", "ancient"));
+    using (var old = new SqliteConnection("Data Source=" + Path.Combine(dir, "learning.db")))
+    { old.Open(); using var cmd = old.CreateCommand(); cmd.CommandText = "DROP TABLE word_metadata"; cmd.ExecuteNonQuery(); }
+    using var migrated = new LearningStore(dir);
+    var word = migrated.Words().Single();
+    Assert(word.Word == "ancient" && word.Category == "" && word.LookupCount == 0 && word.ViewCount == 0, "legacy data lost or counts fabricated");
+    return Task.CompletedTask;
+});
 await Test("Automatic recovery: backoff, rate limits and permanent/uncertain failures", () =>
 {
     Assert(AutomaticRecovery.Delay(new InvalidOperationException("black frame"), 1, false) == TimeSpan.FromSeconds(2), "capture not retried");
@@ -36,7 +76,8 @@ await Test("Recent OCR: consecutive dedup, retention, persistence, no unqueried 
     {
         store.SaveRecentRecognition(Result(Frame(), "The wrecked ship."));
         store.SaveRecentRecognition(Result(Frame(), "The wrecked ship."));
-        Assert(store.RecentRecognitions().Count == 1 && store.Words().Count == 0, "duplicate or unsolicited saved word");
+        var recent = store.RecentRecognitions().Single();
+        Assert(recent.Words.Count > 0 && recent.ToFrame() is not null && store.Words().Count == 0, "history did not retain clickable scene data or unsolicited saved word");
         for (var i = 0; i < 205; i++) store.SaveRecentRecognition(Result(Frame(), "Different sentence " + i));
         Assert(store.RecentRecognitions().Count == 200 && store.RecentRecognitions()[0].Text == "Different sentence 204", "retention/order incorrect");
     }

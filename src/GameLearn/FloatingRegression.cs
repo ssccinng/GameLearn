@@ -88,11 +88,33 @@ internal static class FloatingRegression
             Render((FrameworkElement)book.Content, book.Width, book.Height, Path.Combine(output, "recent-recognition.png"));
             Check("Wordbook has custom chrome and persistent recent sentences", book.WindowStyle == WindowStyle.None && book.Topmost
                 && ((ItemsControl)book.FindName("RecentItems")).Items.Count == 1 && ((TabControl)book.FindName("Pages")).SelectedIndex == 1);
+            var recentWord = Descendants<Button>((DependencyObject)book.Content).FirstOrDefault(button => Equals(button.Content, "wrecked"));
+            Check("Recent sentence exposes a clickable word with its own stored scene", recentWord is not null);
+            recentWord!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check("Recent word click opens the same definition flow and uses a historical frame", vm.DetailWord == "wrecked"
+                && vm.SelectedEncounter is not null && File.Exists(vm.SelectedEncounter.ImagePath));
             var bookPages = (TabControl)book.FindName("Pages"); bookPages.SelectedIndex = 0;
             Render((FrameworkElement)book.Content, book.Width, book.Height, Path.Combine(output, "wordbook-compact.png"));
             book.SetCompact(false);
             Render((FrameworkElement)book.Content, book.Width, book.Height, Path.Combine(output, "wordbook-expanded.png"));
             Check("Wordbook switches between compact overlay and expanded layout", book.Width == 900 && !book.Topmost);
+            vm.CategoryDraft = "剧情"; vm.SaveWord();
+            Check("Category editing persists and appears in filters", vm.SelectedWord?.Category == "剧情" && vm.Categories.Contains("剧情"));
+            vm.CategoryFilter = "未分类";
+            Check("Unclassified filter excludes categorized words", vm.Words.Count == 0);
+            vm.CategoryFilter = "全部分类";
+            var viewed = vm.Words.Single(); var previousViews = viewed.ViewCount;
+            vm.ViewWord(viewed);
+            Check("Explicit wordbook view increments view count once", vm.SelectedWord!.ViewCount == previousViews + 1);
+            ((ComboBox)book.FindName("SortBox")).SelectedIndex = 2;
+            Check("Frequency sort control updates wordbook ordering", vm.WordSort == WordbookSort.MostViewed);
+            ((ComboBox)book.FindName("DateBox")).SelectedIndex = 4;
+            ((TextBox)book.FindName("FromDate")).Text = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd");
+            Check("Custom date control filters by first encounter date", vm.Words.Count == 0);
+            ((TextBox)book.FindName("ThroughDate")).Text = "invalid";
+            Check("Invalid custom date is explained without changing filter", ((TextBlock)book.FindName("FilterHint")).Text.Contains("yyyy-MM-dd") && vm.WordDateThrough is null);
+            vm.ResetWordFilters();
+            Render((FrameworkElement)book.Content, book.Width, book.Height, Path.Combine(output, "wordbook-organized.png"));
             ((Button)book.FindName("ToolbarButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check("Wordbook returns directly to floating toolbar", expands == 2); book = null;
             vm.SelectedSource = null;

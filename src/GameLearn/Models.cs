@@ -115,10 +115,55 @@ public static class SceneContext
     private static bool Neighbors(RecognizedLine a, RecognizedLine b) => b.Bounds.Y - a.Bounds.Y - a.Bounds.Height <= Math.Max(a.Bounds.Height, b.Bounds.Height) * 0.7;
 }
 public record DictionaryEntry(string Word, string Phonetic, string Translation, string Observed, string? ObservedPhonetic = null, string? ObservedTranslation = null);
-public record SavedWord(long Id, string Word, string Phonetic, string Translation, bool Mastered, string Notes, int Encounters, string LastGame);
+public record SavedWord(long Id, string Word, string Phonetic, string Translation, bool Mastered, string Notes, int Encounters, string LastGame)
+{
+    public string Category { get; init; } = "";
+    public string CategoryLabel => string.IsNullOrEmpty(Category) ? "未分类" : Category;
+    public int LookupCount { get; init; }
+    public int ViewCount { get; init; }
+    public DateTimeOffset? FirstSeen { get; init; }
+    public DateTimeOffset? LastSeen { get; init; }
+    public DateTimeOffset? LastViewed { get; init; }
+    public string CountsLabel => $"查词 {LookupCount} · 查看 {ViewCount} · 遇见 {Encounters}";
+    public string DatesLabel => FirstSeen is { } first ? $"首次 {first.LocalDateTime:yyyy/MM/dd} · 最近 {LastSeen?.LocalDateTime:MM/dd HH:mm}" : "尚无场景";
+    public string LastViewedLabel => LastViewed is { } at ? $"最近查看：{at.LocalDateTime:yyyy/MM/dd HH:mm}" : "尚无查看统计";
+}
+public enum WordbookSort { LatestEncounter, FirstEncounter, MostViewed, MostLookedUp, MostEncountered, Alphabetical, LatestViewed }
+public static class WordbookFilter
+{
+    public static IReadOnlyList<SavedWord> Apply(IEnumerable<SavedWord> words, string? category, bool? mastered, DateTime? from, DateTime? through, WordbookSort sort)
+    {
+        var selected = words.Where(w => (category is null || w.Category == category) && (mastered is null || w.Mastered == mastered)
+            && (from is null || w.FirstSeen?.LocalDateTime.Date >= from.Value.Date)
+            && (through is null || w.FirstSeen?.LocalDateTime.Date <= through.Value.Date));
+        var ordered = sort switch {
+            WordbookSort.FirstEncounter => selected.OrderByDescending(w => w.FirstSeen),
+            WordbookSort.MostViewed => selected.OrderByDescending(w => w.ViewCount),
+            WordbookSort.MostLookedUp => selected.OrderByDescending(w => w.LookupCount),
+            WordbookSort.MostEncountered => selected.OrderByDescending(w => w.Encounters),
+            WordbookSort.Alphabetical => selected.OrderBy(w => w.Word, StringComparer.OrdinalIgnoreCase),
+            WordbookSort.LatestViewed => selected.OrderByDescending(w => w.LastViewed),
+            _ => selected.OrderByDescending(w => w.LastSeen)
+        };
+        return ordered.ThenBy(w => w.Word, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+}
 public record Encounter(long Id, string Word, string Observed, string Sentence, string Game, DateTimeOffset At, string ImagePath, PixelRect Bounds);
 public record Recall(SavedWord Word, Encounter Previous, Encounter Current);
-public record RecentRecognition(long Id, string Game, string Source, DateTimeOffset At, string Text);
+public record RecentRecognition(long Id, string Game, string Source, DateTimeOffset At, string Text, string ImagePath = "", int Width = 0, int Height = 0,
+    PixelRect? Region = null, string Fingerprint = "", IReadOnlyList<RecognizedLine>? Lines = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<RecentWord> Words => File.Exists(ImagePath) ? (Lines ?? Array.Empty<RecognizedLine>()).SelectMany(line =>
+        line.Words.Distinct(StringComparer.OrdinalIgnoreCase).Select(word => new RecentWord(word, line, this))).ToArray() : Array.Empty<RecentWord>();
+    public CapturedFrame? ToFrame()
+    {
+        if (!File.Exists(ImagePath) || Width <= 0 || Height <= 0 || Region is null) return null;
+        var bytes = File.ReadAllBytes(ImagePath);
+        return new(Guid.NewGuid(), At, Game, Source, bytes, bytes, Width, Height, Region, Fingerprint);
+    }
+}
+public record RecentWord(string Word, RecognizedLine Line, RecentRecognition Recent);
 public record RecognitionRequest(CapturedFrame Frame, TriggerKind Trigger, long Generation, IOcrProvider Provider, bool TestOnly = false);
 
 public interface IOcrProvider

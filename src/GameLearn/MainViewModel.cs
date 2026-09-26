@@ -56,6 +56,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<SavedWord> Words { get; } = new();
     public ObservableCollection<Encounter> History { get; } = new();
     public ObservableCollection<string> Games { get; } = new() { "全部游戏" };
+    public ObservableCollection<string> Categories { get; } = new() { "全部分类", "未分类" };
+    private string categoryFilter = "全部分类", categoryDraft = "";
+    private bool? masteredFilter;
+    private DateTime? wordDateFrom, wordDateThrough;
+    private WordbookSort wordSort;
+    public string CategoryFilter { get => categoryFilter; set { if (!refreshingWords && Set(ref categoryFilter, value ?? "全部分类")) RefreshWords(); } }
+    public string CategoryDraft { get => categoryDraft; set => Set(ref categoryDraft, value); }
+    public bool? MasteredFilter { get => masteredFilter; set { if (Set(ref masteredFilter, value)) RefreshWords(); } }
+    public DateTime? WordDateFrom { get => wordDateFrom; set { if (Set(ref wordDateFrom, value)) RefreshWords(); } }
+    public DateTime? WordDateThrough { get => wordDateThrough; set { if (Set(ref wordDateThrough, value)) RefreshWords(); } }
+    public WordbookSort WordSort { get => wordSort; set { if (Set(ref wordSort, value)) RefreshWords(); } }
+    public void ResetWordFilters()
+    {
+        categoryFilter = "全部分类"; masteredFilter = null; wordDateFrom = wordDateThrough = null;
+        search = ""; gameFilter = "全部游戏";
+        foreach (var name in new[] { nameof(CategoryFilter), nameof(MasteredFilter), nameof(WordDateFrom), nameof(WordDateThrough), nameof(Search), nameof(GameFilter) }) Raise(name);
+        RefreshWords();
+    }
     public event Action? ShowLookup;
     public event Action<Recall>? RecallAvailable;
     public event Action? FrameChanged;
@@ -135,10 +153,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 DetailWord = value.Word; DetailLemma = ""; DetailPhonetic = value.Phonetic; DetailTranslation = value.Translation;
                 Notes = value.Notes; Mastered = value.Mastered;
+                CategoryDraft = value.Category;
                 foreach (var encounter in Store.History(value.Id)) History.Add(encounter);
                 SelectedEncounter = History.FirstOrDefault();
             }
-            else { DetailWord = "选择一个单词"; DetailLemma = ""; DetailTranslation = "查过的词，会带着游戏场景留在这里。"; DetailPhonetic = ""; SelectedEncounter = null; }
+            else { DetailWord = "选择一个单词"; DetailLemma = ""; CategoryDraft = ""; DetailTranslation = "查过的词，会带着游戏场景留在这里。"; DetailPhonetic = ""; SelectedEncounter = null; }
         }
     }
     private Encounter? selectedEncounter;
@@ -176,6 +195,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string Search { get => search; set { if (Set(ref search, value)) RefreshWords(); } }
     public string GameFilter { get => gameFilter; set { if (refreshingWords) return; if (Set(ref gameFilter, value ?? "全部游戏")) RefreshWords(); } }
     public string WordCount => $"{Store.Words().Count} 个有故事的单词";
+    public string FilteredWordCount => $"当前 {Words.Count} 个词 · 查看次数从本版开始统计";
     public Recall? LastRecall { get; private set; }
     public MainViewModel(HttpClient? httpClient = null)
     {
@@ -420,14 +440,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (!System.Text.RegularExpressions.Regex.IsMatch(observed, "^[A-Za-z]+(?:['’\\-][A-Za-z]+)*$")) { Status = "请输入一个英文单词，可包含连字符或撇号。"; return; }
         var encounter = tracker.Learn(observed, line, frame);
-        Search = ""; GameFilter = "全部游戏"; RefreshWords();
+        ResetWordFilters();
         SelectedWord = Words.FirstOrDefault(w => w.Word == encounter.Word); SelectedEncounter = encounter;
         Status = $"已保存 {observed} · 词义、原句和场景已关联";
     }
     public void OpenRecall()
     {
         if (LastRecall is null) { Status = "还没有再次遇见的单词，可先查一个词。"; return; }
-        Search = ""; GameFilter = "全部游戏"; RefreshWords();
+        ResetWordFilters();
         SelectedWord = Words.FirstOrDefault(w => w.Id == LastRecall.Word.Id); SelectedEncounter = LastRecall.Previous;
         Status = $"上次遇见 {LastRecall.Word.Word} · {LastRecall.Previous.Game} · {LastRecall.Previous.At:g}";
     }
@@ -439,12 +459,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
         var selectedId = SelectedWord?.Id;
         var encounterId = SelectedEncounter?.Id;
-        var draftNotes = Notes; var draftMastered = Mastered;
+        var draftNotes = Notes; var draftMastered = Mastered; var draftCategory = CategoryDraft;
         var draftExplanation = AiExplanation;
-        var refreshed = Store.Words(Search, GameFilter == "全部游戏" ? "" : GameFilter);
-        var games = Store.Words().SelectMany(w => Store.History(w.Id)).Select(e => e.Game).Distinct().OrderBy(g => g).ToArray();
+        var refreshed = WordbookFilter.Apply(Store.Words(Search, GameFilter == "全部游戏" ? "" : GameFilter),
+            CategoryFilter == "全部分类" ? null : CategoryFilter == "未分类" ? "" : CategoryFilter, MasteredFilter, WordDateFrom, WordDateThrough, WordSort);
+        var allWords = Store.Words();
+        var categories = new[] { "全部分类", "未分类" }.Concat(allWords.Select(w => w.Category).Append(CategoryFilter)
+            .Where(c => c.Length > 0 && c is not ("全部分类" or "未分类")).Distinct().Order()).ToArray();
+        if (!Categories.SequenceEqual(categories)) { Categories.Clear(); foreach (var category in categories) Categories.Add(category); }
+        var games = allWords.SelectMany(w => Store.History(w.Id)).Select(e => e.Game).Distinct().OrderBy(g => g).ToArray();
         if (!Games.Skip(1).SequenceEqual(games)) { Games.Clear(); Games.Add("全部游戏"); foreach (var game in games) Games.Add(game); }
-        if (Words.SequenceEqual(refreshed)) { Raise(nameof(WordCount)); Raise(nameof(GameFilter)); return; }
+        if (Words.SequenceEqual(refreshed)) { Raise(nameof(WordCount)); Raise(nameof(FilteredWordCount)); Raise(nameof(GameFilter)); Raise(nameof(CategoryFilter)); return; }
         Words.Clear(); foreach (var word in refreshed) Words.Add(word);
         if (selectedId is not null)
         {
@@ -453,12 +478,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 RefreshSelectedHistory(SelectedWord.Id);
                 SelectedEncounter = History.FirstOrDefault(e => e.Id == encounterId) ?? History.FirstOrDefault();
-                Notes = draftNotes; Mastered = draftMastered;
+                Notes = draftNotes; Mastered = draftMastered; CategoryDraft = draftCategory;
                 if (SelectedEncounter?.Id == encounterId) AiExplanation = draftExplanation;
             }
         }
         Raise(nameof(WordCount));
-        Raise(nameof(SelectedWord)); Raise(nameof(GameFilter));
+        Raise(nameof(FilteredWordCount));
+        Raise(nameof(SelectedWord)); Raise(nameof(GameFilter)); Raise(nameof(CategoryFilter));
         }
         finally { refreshingWords = false; }
     }
@@ -476,7 +502,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public void SaveWord()
     {
         if (SelectedWord is null) return;
-        Store.UpdateWord(SelectedWord.Id, Mastered, Notes); RefreshWords(); Status = "学习状态和备注已保存。";
+        try { Store.SetCategory(SelectedWord.Id, CategoryDraft); }
+        catch (ArgumentException error) { Status = error.Message; return; }
+        Store.UpdateWord(SelectedWord.Id, Mastered, Notes); RefreshWords(); Status = "分类、学习状态和备注已保存。";
+    }
+    public bool ViewWord(SavedWord word)
+    {
+        if (refreshingWords) return false;
+        SelectedWord = word; Store.RecordView(word.Id); RefreshWords();
+        return true;
     }
     public void DeleteSelected()
     {

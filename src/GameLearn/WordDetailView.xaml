@@ -15,9 +15,14 @@
     <Border Background="#20323F" CornerRadius="9" Padding="12" Margin="0,10,0,0"><TextBlock Text="{Binding AiExplanation}" LineHeight="23" Foreground="#D0E2D5"/></Border>
     <Separator Margin="0,18,0,14" Background="#2B424B"/>
     <TextBlock Text="我的记忆" FontWeight="SemiBold" FontSize="15"/>
+    <TextBlock Text="{Binding SelectedWord.CountsLabel}" Foreground="#A8E7BF" FontSize="12" Margin="0,8,0,0" ToolTip="查词为主动查询次数；查看包含查词和从单词本打开，均从本版开始统计。遇见按场景去重。"/>
+    <TextBlock Text="{Binding SelectedWord.DatesLabel}" Style="{StaticResource Muted}" Margin="0,5,0,0"/>
+    <TextBlock Text="{Binding SelectedWord.LastViewedLabel}" Style="{StaticResource Muted}" Margin="0,5,0,0"/>
+    <TextBlock Text="分类 · 可输入新分类名称" Style="{StaticResource Muted}" Margin="0,12,0,5"/>
+    <TextBox Text="{Binding CategoryDraft, UpdateSourceTrigger=PropertyChanged}" MaxLength="40" ToolTip="输入分类，例如剧情、战斗、日常；留空为未分类。点击下方保存生效。"/>
     <CheckBox Content="这个词已经掌握，不再提醒" IsChecked="{Binding Mastered}" Margin="0,10,0,8"/>
     <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="48" MaxHeight="120" TextWrapping="Wrap" ToolTip="添加自己的记忆提示"/>
-    <WrapPanel Margin="0,10,0,18"><Button Content="保存状态与备注" Click="Save_Click" Padding="12,7" Margin="0,0,8,0"/><Button Content="删除词条" Click="Delete_Click" Padding="12,7" Foreground="#F0B4AD"/></WrapPanel>
+    <WrapPanel Margin="0,10,0,18"><Button Content="保存修改" ToolTip="保存分类、掌握状态与备注" Click="Save_Click" Padding="12,7" Margin="0,0,8,0"/><Button Content="删除词条" Click="Delete_Click" Padding="12,7" Foreground="#F0B4AD"/></WrapPanel>
     <DockPanel Margin="0,0,0,8"><TextBlock Text="遇见记录" FontWeight="SemiBold" FontSize="15"/><TextBlock Text="最新在前" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></DockPanel>
     <ListBox ItemsSource="{Binding History}" SelectedItem="{Binding SelectedEncounter}" MaxHeight="190" ScrollViewer.VerticalScrollBarVisibility="Hidden"><ListBox.ItemTemplate><DataTemplate><Border Padding="3,2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Text="{Binding At, StringFormat={}{0:MM/dd HH:mm:ss}}" Foreground="#A8E7BF" FontSize="12"/><StackPanel Grid.Column="1"><TextBlock Text="{Binding Game}"/><TextBlock Text="{Binding Sentence}" Style="{StaticResource Muted}" MaxHeight="36" Margin="0,3,0,0"/></StackPanel></Grid></Border></DataTemplate></ListBox.ItemTemplate></ListBox>
     <Border Background="#091116" CornerRadius="9" Margin="0,10,0,0" Height="190" ClipToBounds="True" MouseLeftButtonUp="EnlargeScene_Click" Cursor="Hand" ToolTip="点击放大当时的场景"><local:SceneViewer Source="{Binding HistoryImage}" HighlightBounds="{Binding SelectedEncounter.Bounds}"/></Border>

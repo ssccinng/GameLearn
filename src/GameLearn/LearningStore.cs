@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace GameLearn;
 
@@ -50,7 +51,7 @@ public sealed class LearningStore : IDisposable
     public LearningStore(string? directory = null)
     {
         this.directory = directory ?? AppSettings.DataDirectory;
-        Directory.CreateDirectory(this.directory); Directory.CreateDirectory(Path.Combine(this.directory, "scenes"));
+        Directory.CreateDirectory(this.directory); Directory.CreateDirectory(Path.Combine(this.directory, "scenes")); Directory.CreateDirectory(Path.Combine(this.directory, "recent-scenes"));
         db = new(new SqliteConnectionStringBuilder { DataSource = Path.Combine(this.directory, "learning.db") }.ToString()); db.Open();
         using var cmd = db.CreateCommand();
         cmd.CommandText = """
@@ -61,48 +62,111 @@ public sealed class LearningStore : IDisposable
             CREATE INDEX IF NOT EXISTS ix_encounters_word ON encounters(word_id,id DESC);
             CREATE TABLE IF NOT EXISTS explanations(cache_key TEXT PRIMARY KEY, explanation TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS recent_recognitions(id INTEGER PRIMARY KEY, game TEXT NOT NULL, source TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS word_metadata(word_id INTEGER PRIMARY KEY REFERENCES words(id) ON DELETE CASCADE,
+                category TEXT NOT NULL DEFAULT '', lookup_count INTEGER NOT NULL DEFAULT 0, view_count INTEGER NOT NULL DEFAULT 0, last_viewed TEXT);
             PRAGMA user_version=1;
             """;
         cmd.ExecuteNonQuery();
+        EnsureRecentColumns();
+    }
+    private void EnsureRecentColumns()
+    {
+        using var columnsCommand = db.CreateCommand(); columnsCommand.CommandText = "PRAGMA table_info(recent_recognitions)";
+        using var reader = columnsCommand.ExecuteReader(); var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read()) columns.Add(reader.GetString(1));
+        foreach (var column in new[] { ("image", "TEXT NOT NULL DEFAULT ''"), ("lines", "TEXT NOT NULL DEFAULT ''"), ("width", "INTEGER NOT NULL DEFAULT 0"),
+            ("height", "INTEGER NOT NULL DEFAULT 0"), ("region_x", "REAL NOT NULL DEFAULT 0"), ("region_y", "REAL NOT NULL DEFAULT 0"),
+            ("region_w", "REAL NOT NULL DEFAULT 0"), ("region_h", "REAL NOT NULL DEFAULT 0"), ("fingerprint", "TEXT NOT NULL DEFAULT ''") })
+        {
+            if (columns.Contains(column.Item1)) continue;
+            using var alter = db.CreateCommand(); alter.CommandText = $"ALTER TABLE recent_recognitions ADD COLUMN {column.Item1} {column.Item2}"; alter.ExecuteNonQuery();
+        }
     }
     public IReadOnlyList<SavedWord> Words(string search = "", string game = "")
     {
         using var cmd = db.CreateCommand();
         cmd.CommandText = """
             SELECT w.id,w.word,w.phonetic,w.translation,w.mastered,w.notes,COUNT(e.id),
-              COALESCE((SELECT s2.game FROM encounters e2 JOIN scenes s2 ON s2.id=e2.scene_id WHERE e2.word_id=w.id ORDER BY e2.id DESC LIMIT 1),'')
-            FROM words w LEFT JOIN encounters e ON e.word_id=w.id
-            WHERE (w.word LIKE $q OR w.translation LIKE $q)
+              COALESCE((SELECT s2.game FROM encounters e2 JOIN scenes s2 ON s2.id=e2.scene_id WHERE e2.word_id=w.id ORDER BY julianday(s2.at) DESC,e2.id DESC LIMIT 1),''),
+              COALESCE(m.category,''),COALESCE(m.lookup_count,0),COALESCE(m.view_count,0),
+              strftime('%Y-%m-%dT%H:%M:%fZ',MIN(julianday(s.at))),strftime('%Y-%m-%dT%H:%M:%fZ',MAX(julianday(s.at))),m.last_viewed
+            FROM words w LEFT JOIN encounters e ON e.word_id=w.id LEFT JOIN scenes s ON s.id=e.scene_id LEFT JOIN word_metadata m ON m.word_id=w.id
+            WHERE (w.word LIKE $q OR w.translation LIKE $q OR w.notes LIKE $q OR m.category LIKE $q
+              OR EXISTS(SELECT 1 FROM encounters es WHERE es.word_id=w.id AND (es.observed LIKE $q OR es.sentence LIKE $q)))
             AND ($g='' OR EXISTS(SELECT 1 FROM encounters eg JOIN scenes sg ON sg.id=eg.scene_id WHERE eg.word_id=w.id AND sg.game=$g))
             GROUP BY w.id ORDER BY MAX(e.id) DESC,w.word
             """;
         cmd.Parameters.AddWithValue("$q", "%" + search + "%"); cmd.Parameters.AddWithValue("$g", game);
         using var reader = cmd.ExecuteReader(); var list = new List<SavedWord>();
-        while (reader.Read()) list.Add(new(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetBoolean(4), reader.GetString(5), reader.GetInt32(6), reader.GetString(7)));
+        while (reader.Read()) list.Add(new(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetBoolean(4), reader.GetString(5), reader.GetInt32(6), reader.GetString(7)) {
+            Category = reader.GetString(8), LookupCount = reader.GetInt32(9), ViewCount = reader.GetInt32(10),
+            FirstSeen = reader.IsDBNull(11) ? null : DateTimeOffset.Parse(reader.GetString(11)),
+            LastSeen = reader.IsDBNull(12) ? null : DateTimeOffset.Parse(reader.GetString(12)),
+            LastViewed = reader.IsDBNull(13) ? null : DateTimeOffset.Parse(reader.GetString(13))
+        });
         return list;
+    }
+    public void RecordView(long wordId, bool lookup = false)
+    {
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO word_metadata(word_id,lookup_count,view_count,last_viewed) VALUES($id,$lookup,1,$at)
+            ON CONFLICT(word_id) DO UPDATE SET lookup_count=lookup_count+$lookup,view_count=view_count+1,last_viewed=$at
+            """;
+        cmd.Parameters.AddWithValue("$id", wordId); cmd.Parameters.AddWithValue("$lookup", lookup ? 1 : 0);
+        cmd.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O")); cmd.ExecuteNonQuery();
+    }
+    public void SetCategory(long wordId, string category)
+    {
+        category = category.Trim();
+        if (category.Length > 40 || category == "全部分类") throw new ArgumentException("分类最多 40 字，不能命名为“全部分类”。");
+        if (category == "未分类") category = "";
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "INSERT INTO word_metadata(word_id,category) VALUES($id,$category) ON CONFLICT(word_id) DO UPDATE SET category=$category";
+        cmd.Parameters.AddWithValue("$id", wordId); cmd.Parameters.AddWithValue("$category", category); cmd.ExecuteNonQuery();
     }
     public void SaveRecentRecognition(RecognitionResult result)
     {
         var text = string.Join("\n", result.Lines.Where(l => l.Words.Any()).Select(l => l.Text.Trim()));
         if (string.IsNullOrWhiteSpace(text)) return;
+        var relativeImage = Path.Combine("recent-scenes", result.Frame.Id + ".png");
+        var imagePath = Path.Combine(directory, relativeImage);
+        var lineJson = JsonSerializer.Serialize(result.Lines.Select(line => new RecognizedLine(line.Text, line.Confidence, line.Bounds)).ToArray());
         using var transaction = db.BeginTransaction();
         using var cmd = db.CreateCommand(); cmd.Transaction = transaction;
         cmd.CommandText = "SELECT game,source,text FROM recent_recognitions ORDER BY id DESC LIMIT 1";
         using (var r = cmd.ExecuteReader())
             if (r.Read() && r.GetString(0) == result.Frame.Game && r.GetString(1) == result.Frame.Source && r.GetString(2) == text) return;
-        cmd.CommandText = "INSERT INTO recent_recognitions(game,source,at,text) VALUES($g,$s,$a,$t); DELETE FROM recent_recognitions WHERE id NOT IN (SELECT id FROM recent_recognitions ORDER BY id DESC LIMIT 200);";
+        if (!File.Exists(imagePath)) { File.WriteAllBytes(imagePath + ".tmp", result.Frame.FullPng); File.Move(imagePath + ".tmp", imagePath, true); }
+        cmd.CommandText = "INSERT INTO recent_recognitions(game,source,at,text,image,lines,width,height,region_x,region_y,region_w,region_h,fingerprint) VALUES($g,$s,$a,$t,$image,$lines,$width,$height,$rx,$ry,$rw,$rh,$fingerprint); DELETE FROM recent_recognitions WHERE id NOT IN (SELECT id FROM recent_recognitions ORDER BY id DESC LIMIT 200);";
         cmd.Parameters.AddWithValue("$g", result.Frame.Game); cmd.Parameters.AddWithValue("$s", result.Frame.Source);
-        cmd.Parameters.AddWithValue("$a", result.Frame.Timestamp.ToString("O")); cmd.Parameters.AddWithValue("$t", text);
+        cmd.Parameters.AddWithValue("$a", result.Frame.Timestamp.ToString("O")); cmd.Parameters.AddWithValue("$t", text); cmd.Parameters.AddWithValue("$image", relativeImage);
+        cmd.Parameters.AddWithValue("$lines", lineJson); cmd.Parameters.AddWithValue("$width", result.Frame.Width); cmd.Parameters.AddWithValue("$height", result.Frame.Height);
+        cmd.Parameters.AddWithValue("$rx", result.Frame.Region.X); cmd.Parameters.AddWithValue("$ry", result.Frame.Region.Y); cmd.Parameters.AddWithValue("$rw", result.Frame.Region.Width); cmd.Parameters.AddWithValue("$rh", result.Frame.Region.Height); cmd.Parameters.AddWithValue("$fingerprint", result.Frame.Fingerprint);
         cmd.ExecuteNonQuery(); transaction.Commit();
+        CleanupRecentImages();
     }
     public IReadOnlyList<RecentRecognition> RecentRecognitions(string search = "")
     {
         using var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT id,game,source,at,text FROM recent_recognitions WHERE text LIKE $q OR game LIKE $q ORDER BY id DESC LIMIT 200";
+        cmd.CommandText = "SELECT id,game,source,at,text,image,lines,width,height,region_x,region_y,region_w,region_h,fingerprint FROM recent_recognitions WHERE text LIKE $q OR game LIKE $q ORDER BY id DESC LIMIT 200";
         cmd.Parameters.AddWithValue("$q", "%" + search + "%");
         using var r = cmd.ExecuteReader(); var rows = new List<RecentRecognition>();
-        while (r.Read()) rows.Add(new(r.GetInt64(0), r.GetString(1), r.GetString(2), DateTimeOffset.Parse(r.GetString(3)), r.GetString(4)));
+        while (r.Read())
+        {
+            IReadOnlyList<RecognizedLine> lines = Array.Empty<RecognizedLine>();
+            try { lines = JsonSerializer.Deserialize<IReadOnlyList<RecognizedLine>>(r.GetString(6)) ?? Array.Empty<RecognizedLine>(); } catch (JsonException) { }
+            rows.Add(new(r.GetInt64(0), r.GetString(1), r.GetString(2), DateTimeOffset.Parse(r.GetString(3)), r.GetString(4),
+                string.IsNullOrEmpty(r.GetString(5)) ? "" : Path.Combine(directory, r.GetString(5)), r.GetInt32(7), r.GetInt32(8), new(r.GetDouble(9), r.GetDouble(10), r.GetDouble(11), r.GetDouble(12)), r.GetString(13), lines));
+        }
         return rows;
+    }
+    private void CleanupRecentImages()
+    {
+        using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT image FROM recent_recognitions WHERE image <> ''";
+        using var reader = cmd.ExecuteReader(); var retained = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read()) retained.Add(Path.GetFullPath(Path.Combine(directory, reader.GetString(0))));
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(directory, "recent-scenes"), "*.png")) if (!retained.Contains(Path.GetFullPath(file))) File.Delete(file);
     }
     public IReadOnlyList<Encounter> History(long wordId)
     {
@@ -183,6 +247,7 @@ public sealed class EncounterTracker(LearningStore store, OfflineDictionary dict
     public Encounter Learn(string observed, RecognizedLine line, CapturedFrame frame)
     {
         var word = store.EnsureWord(dictionary.Lookup(observed));
+        store.RecordView(word.Id, lookup: true);
         var last = store.History(word.Id).FirstOrDefault(e => e.Game == frame.Game);
         seen[(word.Id, frame.Game)] = (frame.Timestamp, line.Text, null);
         if (last is not null && last.Sentence == line.Text && frame.Timestamp >= last.At && frame.Timestamp - last.At < TimeSpan.FromMinutes(5)) return last;
