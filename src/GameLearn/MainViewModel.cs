@@ -25,9 +25,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private long aiConfigurationVersion;
     private string aiConfigurationStatus = "填写配置后，点击「保存并测试 AI」验证服务。";
     private bool testingAi;
+    private bool translatingSentence;
+    private string sentenceTranslation = "";
+    private string translationStatus = "快速翻译未配置";
     public string AiConfigurationStatus { get => aiConfigurationStatus; private set => Set(ref aiConfigurationStatus, value); }
     public bool IsAiTesting { get => testingAi; private set { if (Set(ref testingAi, value)) Raise(nameof(CanTestAi)); } }
     public bool CanTestAi => !IsAiTesting;
+    public bool IsTranslating { get => translatingSentence; private set => Set(ref translatingSentence, value); }
+    public bool CanTranslate => !IsTranslating && !string.IsNullOrWhiteSpace(DetailSentence);
+    public string SentenceTranslation { get => sentenceTranslation; private set => Set(ref sentenceTranslation, value); }
+    public string TranslationStatus { get => translationStatus; private set => Set(ref translationStatus, value); }
     public IReadOnlyList<PrioritizedLine> GetPrioritizedLines()
     {
         var saved = Store.Words().ToDictionary(word => word.Word, StringComparer.OrdinalIgnoreCase);
@@ -168,6 +175,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref selectedEncounter, value)) return;
             DetailSentence = value?.Sentence ?? ""; AiExplanation = "";
+            SentenceTranslation = ""; TranslationStatus = string.IsNullOrWhiteSpace(Settings.TranslationSecret) ? "快速翻译未配置" : "点击快速翻译句子"; Raise(nameof(CanTranslate));
             if (value is not null)
             {
                 var entry = Dictionary.Lookup(value.Observed);
@@ -536,6 +544,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException) { if (!disposed && version == aiConfigurationVersion && SelectedEncounter?.Id == encounterId) AiExplanation = "解释已取消。"; }
         catch (Exception e) { if (!disposed && version == aiConfigurationVersion && SelectedEncounter?.Id == encounterId) AiExplanation = "解释未完成：" + e.Message; }
+    }
+    public async Task TranslateSentenceAsync()
+    {
+        if (SelectedEncounter is null || string.IsNullOrWhiteSpace(DetailSentence)) { TranslationStatus = "请先选择一条原句。"; return; }
+        var snapshot = Settings.Copy(); var sentence = DetailSentence; var key = SentenceTranslationService.CacheKey(snapshot, sentence);
+        try
+        {
+            SentenceTranslationService.ValidateConfiguration(snapshot);
+            if (Store.GetTranslation(key) is { } cached) { SentenceTranslation = cached; TranslationStatus = "已使用缓存译文"; return; }
+            IsTranslating = true; TranslationStatus = "正在快速翻译…";
+            var translation = await new SentenceTranslationService(http).TranslateAsync(snapshot, sentence, sourceCancellation.Token);
+            if (disposed || SelectedEncounter?.Id is null || SelectedEncounter.Sentence != sentence) return;
+            Store.SaveTranslation(key, translation); SentenceTranslation = translation; TranslationStatus = $"{snapshot.TranslationProvider} · 已完成";
+        }
+        catch (OperationCanceledException) { TranslationStatus = "翻译已取消。"; }
+        catch (Exception error) { TranslationStatus = "快速翻译失败：" + error.Message; }
+        finally { IsTranslating = false; Raise(nameof(CanTranslate)); }
     }
     public async Task TestCloudAsync()
     {

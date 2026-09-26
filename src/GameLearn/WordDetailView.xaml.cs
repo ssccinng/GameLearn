@@ -6,6 +6,7 @@ public partial class WordDetailView : UserControl
     public WordDetailView() => InitializeComponent();
     private MainViewModel Vm => (MainViewModel)DataContext;
     private async void Explain_Click(object sender, RoutedEventArgs e) => await Vm.ExplainAsync();
+    private async void Translate_Click(object sender, RoutedEventArgs e) => await Vm.TranslateSentenceAsync();
     private void Save_Click(object sender, RoutedEventArgs e) => Vm.SaveWord();
     private void Delete_Click(object sender, RoutedEventArgs e)
     {

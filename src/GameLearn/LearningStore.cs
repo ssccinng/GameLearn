@@ -61,6 +61,7 @@ public sealed class LearningStore : IDisposable
             CREATE TABLE IF NOT EXISTS encounters(id INTEGER PRIMARY KEY, word_id INTEGER NOT NULL REFERENCES words(id) ON DELETE CASCADE, scene_id TEXT NOT NULL REFERENCES scenes(id), observed TEXT NOT NULL, sentence TEXT NOT NULL, x REAL,y REAL,w REAL,h REAL, UNIQUE(word_id,scene_id));
             CREATE INDEX IF NOT EXISTS ix_encounters_word ON encounters(word_id,id DESC);
             CREATE TABLE IF NOT EXISTS explanations(cache_key TEXT PRIMARY KEY, explanation TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS translations(cache_key TEXT PRIMARY KEY, translation TEXT NOT NULL, at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS recent_recognitions(id INTEGER PRIMARY KEY, game TEXT NOT NULL, source TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS word_metadata(word_id INTEGER PRIMARY KEY REFERENCES words(id) ON DELETE CASCADE,
                 category TEXT NOT NULL DEFAULT '', lookup_count INTEGER NOT NULL DEFAULT 0, view_count INTEGER NOT NULL DEFAULT 0, last_viewed TEXT);
@@ -213,7 +214,7 @@ public sealed class LearningStore : IDisposable
     }
     public void Clear()
     {
-        using var cmd = db.CreateCommand(); cmd.CommandText = "DELETE FROM words; DELETE FROM explanations; DELETE FROM recent_recognitions;"; cmd.ExecuteNonQuery(); CleanupUnusedScenes();
+        using var cmd = db.CreateCommand(); cmd.CommandText = "DELETE FROM words; DELETE FROM explanations; DELETE FROM translations; DELETE FROM recent_recognitions;"; cmd.ExecuteNonQuery(); CleanupUnusedScenes(); CleanupRecentImages();
     }
     public void CleanupUnusedScenes()
     {
@@ -226,6 +227,15 @@ public sealed class LearningStore : IDisposable
     public string? GetExplanation(string key)
     {
         using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT explanation FROM explanations WHERE cache_key=$k"; cmd.Parameters.AddWithValue("$k", key); return cmd.ExecuteScalar() as string;
+    }
+    public string? GetTranslation(string key)
+    {
+        using var cmd = db.CreateCommand(); cmd.CommandText = "SELECT translation FROM translations WHERE cache_key=$k"; cmd.Parameters.AddWithValue("$k", key); return cmd.ExecuteScalar() as string;
+    }
+    public void SaveTranslation(string key, string translation)
+    {
+        using var cmd = db.CreateCommand(); cmd.CommandText = "INSERT OR REPLACE INTO translations VALUES($k,$t,$at)";
+        cmd.Parameters.AddWithValue("$k", key); cmd.Parameters.AddWithValue("$t", translation); cmd.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O")); cmd.ExecuteNonQuery();
     }
     public void SaveExplanation(string key, string explanation)
     {

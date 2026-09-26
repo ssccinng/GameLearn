@@ -240,6 +240,7 @@ public partial class MainWindow : Window
     private void LoadSettings()
     {
         var s = Vm.Settings; EngineBox.SelectedIndex = (int)s.Engine; OcrTokenBox.Password = AppSettings.Unprotect(s.OcrSecret); AiTokenBox.Password = AppSettings.Unprotect(s.AiSecret);
+        TranslationProviderBox.SelectedIndex = (int)s.TranslationProvider; TranslationUrlBox.Text = s.TranslationBaseUrl; TranslationTokenBox.Password = AppSettings.Unprotect(s.TranslationSecret); TranslationRegionBox.Text = s.TranslationRegion; TranslationSourceBox.Text = s.TranslationSourceLanguage; TranslationTargetBox.Text = s.TranslationTargetLanguage;
         TextRegionBox.IsChecked = s.PreferTextRegions;
         LocalIntervalBox.Text = s.LocalIntervalSeconds.ToString(CultureInfo.InvariantCulture); CloudIntervalBox.Text = s.CloudIntervalSeconds.ToString(CultureInfo.InvariantCulture); TimeoutBox.Text = s.CloudTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
         CaptureKeyBox.Text = s.CaptureHotkey; AutoKeyBox.Text = s.AutoHotkey; RecallKeyBox.Text = s.RecallHotkey; AiUrlBox.Text = s.AiBaseUrl; AiModelBox.Text = s.AiModel;
@@ -254,11 +255,14 @@ public partial class MainWindow : Window
             if (!int.TryParse(TimeoutBox.Text, out var timeout) || timeout < 5 || timeout > 600) throw new ArgumentException("在线超时须为 5–600 秒。");
             if (!int.TryParse(ObsPortBox.Text, out var obsPort) || obsPort < 1 || obsPort > 65535) throw new ArgumentException("OBS 端口须为 1–65535。");
             AiExplanationService.ValidateConfiguration(AiUrlBox.Text, AiModelBox.Text, allowDisabled: true);
+            var translation = new AppSettings { TranslationProvider = (SentenceTranslationProvider)TranslationProviderBox.SelectedIndex, TranslationBaseUrl = TranslationUrlBox.Text.Trim(), TranslationSecret = AppSettings.Protect(TranslationTokenBox.Password.Trim()), TranslationRegion = TranslationRegionBox.Text.Trim(), TranslationSourceLanguage = TranslationSourceBox.Text.Trim(), TranslationTargetLanguage = TranslationTargetBox.Text.Trim() };
+            SentenceTranslationService.ValidateConfiguration(translation, allowDisabled: true);
             ConfigureHotkeys(CaptureKeyBox.Text.Trim(), AutoKeyBox.Text.Trim(), RecallKeyBox.Text.Trim());
             var s = Vm.Settings; s.Engine = (OcrEngineKind)EngineBox.SelectedIndex; s.LocalIntervalSeconds = local; s.CloudIntervalSeconds = cloud; s.CloudTimeoutSeconds = timeout;
             s.PreferTextRegions = TextRegionBox.IsChecked == true;
             s.CaptureHotkey = CaptureKeyBox.Text.Trim(); s.AutoHotkey = AutoKeyBox.Text.Trim(); s.RecallHotkey = RecallKeyBox.Text.Trim();
             s.OcrSecret = AppSettings.Protect(OcrTokenBox.Password.Trim()); s.AiSecret = AppSettings.Protect(AiTokenBox.Password.Trim()); s.AiBaseUrl = AiUrlBox.Text.Trim().TrimEnd('/'); s.AiModel = AiModelBox.Text.Trim();
+            s.TranslationProvider = translation.TranslationProvider; s.TranslationBaseUrl = translation.TranslationBaseUrl; s.TranslationSecret = translation.TranslationSecret; s.TranslationRegion = translation.TranslationRegion; s.TranslationSourceLanguage = translation.TranslationSourceLanguage; s.TranslationTargetLanguage = translation.TranslationTargetLanguage;
             s.ObsUseLocalConfiguration = ObsLocalConfigBox.IsChecked == true; s.ObsPort = obsPort; s.ObsSecret = AppSettings.Protect(ObsPasswordBox.Password);
             Vm.ApplySettings(); return true;
         }
@@ -286,6 +290,7 @@ public partial class MainWindow : Window
         catch (Exception error) { Vm.ReportAiConfigurationError(error.Message); return false; }
     }
     private void SaveAi_Click(object sender, RoutedEventArgs e) => SaveAiSettings();
+    private void SaveTranslation_Click(object sender, RoutedEventArgs e) { if (SaveSettings()) Vm.Status = "翻译配置已保存。"; }
     private async void TestAi_Click(object sender, RoutedEventArgs e) { if (SaveAiSettings()) await Vm.TestAiConnectionAsync(); }
     private async void TestCloud_Click(object sender, RoutedEventArgs e) { if (SaveSettings()) await Vm.TestCloudAsync(); }
     private void OpenData_Click(object sender, RoutedEventArgs e) => Process.Start(new ProcessStartInfo(AppSettings.DataDirectory) { UseShellExecute = true });

@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 namespace GameLearn;
 
 public enum OcrEngineKind { Local, PaddleCloud }
+public enum SentenceTranslationProvider { DeepL, AzureTranslator }
 public enum TriggerKind { Manual, Automatic }
 public enum CaptureSourceKind { Window, ObsProgram, ObsScene, ObsInput }
 public record WindowSource(nint Handle, string Title, string ProcessName, CaptureSourceKind Kind = CaptureSourceKind.Window, string? ObsName = null, bool IsActive = false)

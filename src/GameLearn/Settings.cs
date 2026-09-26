@@ -15,6 +15,12 @@ public sealed class AppSettings
     public string AiSecret { get; set; } = "";
     public string AiBaseUrl { get; set; } = "";
     public string AiModel { get; set; } = "";
+    public SentenceTranslationProvider TranslationProvider { get; set; } = SentenceTranslationProvider.DeepL;
+    public string TranslationBaseUrl { get; set; } = "";
+    public string TranslationSecret { get; set; } = "";
+    public string TranslationRegion { get; set; } = "";
+    public string TranslationSourceLanguage { get; set; } = "EN";
+    public string TranslationTargetLanguage { get; set; } = "ZH";
     public string CaptureHotkey { get; set; } = "Ctrl+Alt+E";
     public string AutoHotkey { get; set; } = "Ctrl+Alt+A";
     public string RecallHotkey { get; set; } = "Ctrl+Alt+R";

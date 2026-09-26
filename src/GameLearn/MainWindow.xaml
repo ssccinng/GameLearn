@@ -105,6 +105,17 @@
           </StackPanel>
           <StackPanel Grid.Column="2">
             <Border Style="{StaticResource Card}" Margin="0,0,0,16"><StackPanel>
+              <TextBlock Text="快速句子翻译" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,14"/>
+              <TextBlock Text="独立翻译接口 · 不调用 AI 推理" Style="{StaticResource Muted}" Margin="0,0,0,10"/>
+              <ComboBox x:Name="TranslationProviderBox"><ComboBoxItem Content="DeepL API"/><ComboBoxItem Content="Azure Translator"/></ComboBox>
+              <TextBlock Text="API 地址（可留空使用默认地址）" Style="{StaticResource Muted}" Margin="0,12,0,5"/><TextBox x:Name="TranslationUrlBox" ToolTip="DeepL 可填 api-free.deepl.com；Azure 可填服务 Endpoint"/>
+              <TextBlock Text="API Key" Style="{StaticResource Muted}" Margin="0,12,0,5"/><PasswordBox x:Name="TranslationTokenBox"/>
+              <TextBlock Text="Azure 区域（DeepL 留空）" Style="{StaticResource Muted}" Margin="0,12,0,5"/><TextBox x:Name="TranslationRegionBox"/>
+              <Grid Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="源语言" Style="{StaticResource Muted}"/><TextBox x:Name="TranslationSourceBox" Text="EN" Margin="0,5,0,0"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="目标语言" Style="{StaticResource Muted}"/><TextBox x:Name="TranslationTargetBox" Text="ZH" Margin="0,5,0,0"/></StackPanel></Grid>
+              <Button Content="保存翻译配置" Click="SaveTranslation_Click" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+              <TextBlock Text="{Binding TranslationStatus}" Foreground="#A8E7BF" TextWrapping="Wrap" Margin="0,10,0,0"/>
+            </StackPanel></Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,16"><StackPanel>
               <TextBlock Text="AI 语境解释  /  可选" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,14"/>
               <TextBlock Text="AI 服务地址（HTTP / HTTPS）" Style="{StaticResource Muted}"/><TextBox x:Name="AiUrlBox" Margin="0,6,0,6" ToolTip="可填写主机和端口、/v1 基础地址或完整的 /chat/completions 地址"/>
               <TextBlock Text="只填主机和端口时，自动补上 /v1/chat/completions；也支持完整接口地址。" Style="{StaticResource Muted}" Margin="0,0,0,12"/>

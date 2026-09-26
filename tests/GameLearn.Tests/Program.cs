@@ -492,6 +492,29 @@ await Test("Floating placement: negative monitors, disconnected screens and scre
     return Task.CompletedTask;
 });
 
+await Test("Fast sentence translation: DeepL and Azure requests, parse and cache identity", async () =>
+{
+    var calls = 0;
+    using var client = new HttpClient(new FakeHttp(async (request, ct) =>
+    {
+        calls++;
+        var body = await request.Content!.ReadAsStringAsync(ct);
+        Assert(body.Contains("Friends come bearing Nopo"), "sentence omitted");
+        if (request.RequestUri!.Host == "deepl.example")
+        {
+            Assert(request.Headers.GetValues("Authorization").Single().StartsWith("DeepL-Auth-Key"), "DeepL auth missing");
+            return FakeHttp.Json("{\"translations\":[{\"text\":\"朋友们带着 Nopo 来了。\"}]}");
+        }
+        Assert(request.Headers.GetValues("Ocp-Apim-Subscription-Key").Single() == "azure-key", "Azure key missing");
+        Assert(request.Headers.GetValues("Ocp-Apim-Subscription-Region").Single() == "westus", "Azure region missing");
+        return FakeHttp.Json("[{\"translations\":[{\"text\":\"朋友们带着 Nopo 来了。\"}]}]");
+    }));
+    var deepl = new AppSettings { TranslationProvider = SentenceTranslationProvider.DeepL, TranslationBaseUrl = "https://deepl.example", TranslationSecret = AppSettings.Protect("deepl-key"), TranslationSourceLanguage = "EN", TranslationTargetLanguage = "ZH" };
+    var azure = new AppSettings { TranslationProvider = SentenceTranslationProvider.AzureTranslator, TranslationBaseUrl = "https://azure.example", TranslationSecret = AppSettings.Protect("azure-key"), TranslationRegion = "westus", TranslationSourceLanguage = "en", TranslationTargetLanguage = "zh-Hans" };
+    Assert(await new SentenceTranslationService(client).TranslateAsync(deepl, "Friends come bearing Nopo", CancellationToken.None) == "朋友们带着 Nopo 来了。", "DeepL parse failed");
+    Assert(await new SentenceTranslationService(client).TranslateAsync(azure, "Friends come bearing Nopo", CancellationToken.None) == "朋友们带着 Nopo 来了。", "Azure parse failed");
+    Assert(calls == 2 && SentenceTranslationService.CacheKey(deepl, "A") != SentenceTranslationService.CacheKey(azure, "A"), "translation cache identity incorrect");
+});
 await Test("AI endpoint: HTTP root, versioned bases, prefixes and complete endpoints", () =>
 {
     var cases = new Dictionary<string, string>
